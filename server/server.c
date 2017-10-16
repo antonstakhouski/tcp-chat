@@ -18,12 +18,6 @@ void error(const char *msg)
     exit(1);
 }
 
-void disconnect(int newsockfd)
-{
-    // close
-    close(newsockfd);
-}
-
 void echo(char* buffer, int newsockfd)
 {
     int n;
@@ -116,28 +110,30 @@ int main(int argc, char *argv[])
         error("ERROR on binding");
 
     //listen
-    listen(sockfd,5);
+    listen(sockfd, 5);
     clilen = sizeof(cli_addr);
-
-    newsockfd = accept(sockfd,
-            (struct sockaddr *) &cli_addr,
-            &clilen);
-    if (newsockfd < 0)
-        error("ERROR on accept");
-
     while (1) {
-        //read
-        bzero(buffer,MAX_LEN);
-        if ((n = read(newsockfd, buffer, MAX_LEN)) > 0) {
-            if (!strncmp(buffer, CLOSE_STR, strlen(CLOSE_STR)))
-                close(newsockfd);
-            if (!strncmp(buffer, ECHO_STR, strlen(ECHO_STR)))
-                echo(buffer, newsockfd);
-            if (!strncmp(buffer, UPLOAD_STR, strlen(UPLOAD_STR))) {
-                upload(strstr(buffer, "\n") + 1, n - strlen(UPLOAD_STR), newsockfd);
+        newsockfd = accept(sockfd,
+                (struct sockaddr *) &cli_addr,
+                &clilen);
+        if (newsockfd < 0)
+            error("ERROR on accept");
+
+        while (1) {
+            bzero(buffer,MAX_LEN);
+            if ((n = read(newsockfd, buffer, MAX_LEN)) > 0) {
+                if (!strncmp(buffer, CLOSE_STR, strlen(CLOSE_STR))) {
+                    close(newsockfd);
+                    break;
+                }
+                if (!strncmp(buffer, ECHO_STR, strlen(ECHO_STR)))
+                    echo(buffer, newsockfd);
+                if (!strncmp(buffer, UPLOAD_STR, strlen(UPLOAD_STR))) {
+                    upload(strstr(buffer, "\n") + 1, n - strlen(UPLOAD_STR), newsockfd);
+                }
+                if (!strncmp(buffer, TIME_STR, strlen(TIME_STR)))
+                    send_time(newsockfd);
             }
-            if (!strncmp(buffer, TIME_STR, strlen(TIME_STR)))
-                send_time(newsockfd);
         }
     }
     close(newsockfd);

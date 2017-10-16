@@ -16,15 +16,77 @@ void error(const char *msg)
     exit(0);
 }
 
+void get_cmd(int opcode, char* cmd)
+{
+    switch(opcode) {
+        case 1:
+            strcpy(cmd, TIME_STR);
+            break;
+        case 2:
+            strcpy(cmd, ECHO_STR);
+            break;
+        case 3:
+            strcpy(cmd, UPLOAD_STR);
+            break;
+        case 0:
+            strcpy(cmd, CLOSE_STR);
+    }
+}
+
+void get_time(int sockfd)
+{
+    char buffer[MAX_LEN] = {0};
+    read(sockfd, buffer, MAX_LEN);
+    printf("%s\n", buffer);
+}
+
+void echo(int sockfd)
+{
+    char buffer[MAX_LEN];
+    scanf("%s", buffer);
+    write(sockfd, buffer, strlen(buffer));
+}
+
+void upload(char* filename, int sockfd)
+{
+    FILE* file;
+    char buffer[MAX_LEN];
+
+    if(!(file = fopen(filename, "rb"))) {
+        puts("not open");
+        exit(1);
+    }
+    size_t size = 0;
+    bzero(buffer, MAX_LEN);
+    strcpy(buffer, filename);
+    strcat(buffer, "\n");
+    write(sockfd, buffer, strlen(buffer));
+
+    bzero(buffer, MAX_LEN);
+    while (( size = fread(buffer, 1, MAX_LEN, file))) {
+        write(sockfd, buffer, size);
+        bzero(buffer, MAX_LEN);
+    }
+    fclose(file);
+}
+
+void show_help()
+{
+    puts("Choose action:");
+    puts("1 - TIME");
+    puts("2 - ECHO");
+    puts("3 - UPLOAD");
+    puts("0 - EXIT");
+}
+
 int main(int argc, char *argv[])
 {
-    int sockfd, portno, n;
+    int sockfd, portno;
     struct sockaddr_in serv_addr;
     struct hostent *server;
 
-    char buffer[MAX_LEN];
-    if (argc < 4) {
-       fprintf(stderr, "usage %s hostname port command [file]\n", argv[0]);
+    if (argc < 3) {
+       fprintf(stderr, "usage %s hostname port\n", argv[0]);
        exit(0);
     }
 
@@ -49,60 +111,37 @@ int main(int argc, char *argv[])
     if (connect(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0)
         error("ERROR connecting");
 
-    bzero(buffer, MAX_LEN);
-    strcpy(buffer, argv[3]);
-    strcat(buffer, "\n");
-    n = write(sockfd, buffer, strlen(buffer));
-    if (n < 0)
-        error("ERROR writing to socket");
-    // get time
-    if (!strncmp(argv[3], TIME_STR, strlen(TIME_STR) - 1)) {
-        bzero(buffer, MAX_LEN);
-        n = read(sockfd, buffer, MAX_LEN - 1);
-        if (n < 0)
-            error("ERROR reading from socket");
-        printf("%s\n", buffer);
-    }
-    // echo
-    if (!strncmp(argv[3], ECHO_STR, strlen(ECHO_STR) - 1)) {
-        if (argc >= 5) {
-            size_t i = 0;
-            puts(argv[4]);
-            while (i < strlen(argv[4])) {
-                bzero(buffer, MAX_LEN);
-                strncpy(buffer, &(argv[4][i]), MAX_LEN - 1);
-                n = write(sockfd, buffer, MAX_LEN);
-                if (n < 0)
-                    error("ERROR writing to socket");
-                i += (MAX_LEN - 1);
-            }
-        }
-    }
-    // upload
-    if (!strncmp(argv[3], UPLOAD_STR, strlen(UPLOAD_STR) - 1)) {
-        FILE* file;
-        if(!(file = fopen(argv[4], "rb"))) {
-            puts("not open");
-            exit(1);
-        }
-        size_t size = 0;
-        if (argc >= 5) {
-            bzero(buffer, MAX_LEN);
-            strcpy(buffer, argv[4]);
-            strcat(buffer, "\n");
-            printf("%zu", strlen(buffer));
-            write(sockfd, buffer, strlen(buffer));
+    int choize;
+    char cmd[256];
+    while (1) {
+        show_help();
 
-            bzero(buffer, MAX_LEN);
-            while (( size = fread(buffer, 1, MAX_LEN, file))) {
-                n = write(sockfd, buffer, size);
-                bzero(buffer, MAX_LEN);
-                if (n < 0)
-                    error("ERROR writing to socket");
-            }
+        int res;
+        res = scanf("%d", &choize);
+        while(!res || choize < 0 || choize > 3)
+            res = scanf("%d", &choize);
+        get_cmd(choize, cmd);
+        write(sockfd, cmd, strlen(cmd));
+
+        if (!strncmp(cmd, TIME_STR, strlen(TIME_STR) - 1))
+            get_time(sockfd);
+
+        if (!strncmp(cmd, ECHO_STR, strlen(ECHO_STR) - 1)) {
+            echo(sockfd);
         }
-        fclose(file);
+
+        if (!strncmp(cmd, UPLOAD_STR, strlen(UPLOAD_STR) - 1)) {
+            char filename[256];
+            puts("Enter filename");
+            scanf("%s", filename);
+            upload(filename, sockfd);
+        }
+
+        if (!strncmp(cmd, CLOSE_STR, strlen(CLOSE_STR) - 1)) {
+            close(sockfd);
+            return 0;
+        }
     }
-    close(sockfd);
+
     return 0;
 }
