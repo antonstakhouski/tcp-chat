@@ -8,7 +8,7 @@
 #include <netdb.h>
 #include <assert.h>
 
-#include "constants.h"
+#include "../constants.h"
 
 void error(const char *msg)
 {

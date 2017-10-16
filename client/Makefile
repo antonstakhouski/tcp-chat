@@ -1,0 +1,17 @@
+CC=gcc
+CFLAGS=-c -Wall -g -O0 -pedantic
+LDFLAGS=
+SOURCES=client.c
+OBJECTS=$(SOURCES:.c=.o)
+EXECUTABLES=client
+
+all: $(SOURCES) $(EXECUTABLES)
+
+client: client.o
+	$(CC) $(LDFLAGS) client.o -o $@
+
+.c.o:
+	$(CC) $(CFLAGS) $< -o $@
+
+clean:
+	rm $(OBJECTS) $(EXECUTABLES)
