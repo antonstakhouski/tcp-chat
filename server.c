@@ -8,6 +8,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <time.h>
+#include <assert.h>
 
 #include "constants.h"
 
@@ -84,13 +85,18 @@ int main(int argc, char *argv[])
 
             // upload
             if (!strncmp(buffer, UPLOAD_STR, strlen(UPLOAD_STR))) {
+                char filename[256] = {0};
                 puts(buffer);
-                FILE* out_file = fopen("out", "wb");
-                size_t sdiff = n - strlen(UPLOAD_STR);
-                if (sdiff > (size_t)0) {
-                    fwrite(buffer + strlen(UPLOAD_STR), sdiff, 1, out_file);
-                }
                 bzero(buffer, MAX_LEN);
+
+                n = read(newsockfd, buffer, MAX_LEN);
+                char* text_pos = strstr(buffer, "\n") + 1;
+                size_t name_len = text_pos - buffer - 1;
+                strncpy(filename, buffer, name_len);
+                FILE* out_file = fopen(filename, "wb");
+                fwrite(text_pos, 1, n - name_len - 1, out_file);
+                bzero(buffer, MAX_LEN);
+
                 while((n = read(newsockfd, buffer, MAX_LEN)) > 0) {
                     fwrite(buffer, 1, n, out_file);
                     bzero(buffer, MAX_LEN);

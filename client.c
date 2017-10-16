@@ -6,6 +6,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>
+#include <assert.h>
 
 #include "constants.h"
 
@@ -86,7 +87,12 @@ int main(int argc, char *argv[])
         }
         size_t size = 0;
         if (argc >= 5) {
-            puts(argv[4]);
+            bzero(buffer, MAX_LEN);
+            strcpy(buffer, argv[4]);
+            strcat(buffer, "\n");
+            printf("%zu", strlen(buffer));
+            write(sockfd, buffer, strlen(buffer));
+
             bzero(buffer, MAX_LEN);
             while (( size = fread(buffer, 1, MAX_LEN, file))) {
                 n = write(sockfd, buffer, size);
