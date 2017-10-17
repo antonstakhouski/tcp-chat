@@ -30,7 +30,7 @@ void echo(char* buff, int newsockfd)
     puts(buffer);
 }
 
-void upload(int newsockfd)
+void upload(char* fname, size_t bsize, int newsockfd)
 {
     char buffer[MAX_LEN] = {0};
     int n;
@@ -40,31 +40,58 @@ void upload(int newsockfd)
     long filesize;
     size_t filename_len;
 
-    // if we get no info after command
-    n = read(newsockfd, buffer, MAX_LEN);
-    size_pos = strstr(buffer, "\n");
-    while(!size_pos) {
-        strcat(filename, buffer);
-        n = read(newsockfd, buffer, MAX_LEN);
-        size_pos = strstr(buffer, "\n");
-    }
-    filename_len = size_pos - buffer;
-    strncat(filename, buffer, filename_len);
-    out_file = fopen(filename, "wb");
-    size_pos++;
+    if (strlen(fname)) {
+        size_pos = strstr(fname, "\n");
+        while(!size_pos) {
+            strcat(filename, fname);
+            n = read(newsockfd, fname, MAX_LEN);
+            size_pos = strstr(fname, "\n");
+        }
+        filename_len = size_pos - fname;
+        strncat(filename, fname, filename_len);
+        out_file = fopen(filename, "wb");
+        size_pos++;
 
-    filesize= *((long*)size_pos);
-    if (!filesize) {
-        bzero(buffer, MAX_LEN);
-        n = read(newsockfd, buffer, MAX_LEN);
-        filesize= *((long*)buffer);
-        filesize -= fwrite(buffer + sizeof(filesize), 1, n - sizeof(filesize), out_file);
+        filesize= *((long*)size_pos);
+        if (!filesize) {
+            bzero(buffer, MAX_LEN);
+            n = read(newsockfd, buffer, MAX_LEN);
+            filesize= *((long*)buffer);
+            filesize -= fwrite(buffer + sizeof(filesize),
+                    1, n - sizeof(filesize), out_file);
+        }
+        else {
+            size_t predata = size_pos + sizeof(filesize) - fname;
+            filesize -= fwrite(size_pos + sizeof(filesize), 1, bsize - predata, out_file);
+        }
     }
     else {
-        size_t predata = size_pos + sizeof(filesize) - buffer;
-        filesize -= fwrite(size_pos + sizeof(filesize), 1, n - predata, out_file);
-    }
+        // if we get no info after command
+        n = read(newsockfd, buffer, MAX_LEN);
+        size_pos = strstr(buffer, "\n");
+        while(!size_pos) {
+            strcat(filename, buffer);
+            n = read(newsockfd, buffer, MAX_LEN);
+            size_pos = strstr(buffer, "\n");
+        }
+        filename_len = size_pos - buffer;
+        strncat(filename, buffer, filename_len);
+        out_file = fopen(filename, "wb");
+        size_pos++;
 
+        filesize= *((long*)size_pos);
+        if (!filesize) {
+            bzero(buffer, MAX_LEN);
+            n = read(newsockfd, buffer, MAX_LEN);
+            filesize= *((long*)buffer);
+            filesize -= fwrite(buffer + sizeof(filesize),
+                    1, n - sizeof(filesize), out_file);
+        }
+        else {
+            size_t predata = size_pos + sizeof(filesize) - buffer;
+            filesize -= fwrite(size_pos + sizeof(filesize), 1, n - predata, out_file);
+        }
+    }
     // read from socket to file
     while (filesize) {
         n = read(newsockfd, buffer, MAX_LEN);
@@ -130,7 +157,8 @@ int main(int argc, char *argv[])
                 if (!strncmp(buffer, ECHO_STR, strlen(ECHO_STR)))
                     echo(strstr(buffer, "\n") + 1, newsockfd);
                 if (!strncmp(buffer, UPLOAD_STR, strlen(UPLOAD_STR))) {
-                    upload(newsockfd);
+                    char* fname = strstr(buffer, "\n") + 1;
+                    upload(fname, n - (fname - buffer), newsockfd);
                 }
                 if (!strncmp(buffer, TIME_STR, strlen(TIME_STR)))
                     send_time(newsockfd);

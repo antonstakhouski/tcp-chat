@@ -53,9 +53,10 @@ void upload(char* filename, int sockfd)
     char buffer[MAX_LEN];
 
     if(!(file = fopen(filename, "rb"))) {
-        puts("not open");
-        exit(1);
+        puts("error opening file");
+        return;
     }
+    /** write(sockfd, UPLOAD_STR, strlen(UPLOAD_STR)); */
     size_t size = 0;
     bzero(buffer, MAX_LEN);
     strcpy(buffer, filename);
@@ -126,23 +127,21 @@ int main(int argc, char *argv[])
         while(!res || choize < 0 || choize > 3)
             res = scanf("%d", &choize);
         get_cmd(choize, cmd);
-        write(sockfd, cmd, strlen(cmd));
+        /** if (strcmp(cmd, CLOSE_STR)) */
+            write(sockfd, cmd, strlen(cmd));
 
-        if (!strncmp(cmd, TIME_STR, strlen(TIME_STR) - 1))
+
+        if (!strcmp(cmd, TIME_STR))
             get_time(sockfd);
-
-        if (!strncmp(cmd, ECHO_STR, strlen(ECHO_STR) - 1)) {
+        if (!strcmp(cmd, ECHO_STR))
             echo(sockfd);
-        }
-
-        if (!strncmp(cmd, UPLOAD_STR, strlen(UPLOAD_STR) - 1)) {
+        if (!strcmp(cmd, UPLOAD_STR)) {
             char filename[256];
             puts("Enter filename");
             scanf("%s", filename);
             upload(filename, sockfd);
         }
-
-        if (!strncmp(cmd, CLOSE_STR, strlen(CLOSE_STR) - 1)) {
+        if (!strcmp(cmd, CLOSE_STR)) {
             close(sockfd);
             return 0;
         }
