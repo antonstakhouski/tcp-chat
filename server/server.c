@@ -9,6 +9,7 @@
 #include <netinet/in.h>
 #include <time.h>
 #include <assert.h>
+#include <stropts.h>
 
 #include "../constants.h"
 
@@ -18,53 +19,83 @@ void error(const char *msg)
     exit(1);
 }
 
-void echo(char* buffer, int newsockfd)
+void echo(char* buff, int newsockfd)
 {
-    int n;
+    char buffer[MAX_LEN] = {0};
+    puts("echo");
+
+    if (strlen(buff))
+        puts(buff);
+
+    read(newsockfd, buffer, MAX_LEN - 1);
     puts(buffer);
-    bzero(buffer, MAX_LEN);
-    while(!read(newsockfd, buffer, MAX_LEN - 1));
-    puts(buffer);
-    while((n = read(newsockfd, buffer, MAX_LEN - 1)) > 0) {
-        puts("echo");
-        puts(buffer);
-        bzero(buffer, MAX_LEN);
-    }
-    if (n < 0)
-        error("ERROR writing to socket");
 }
 
-void upload(char* buff, int bsize, int newsockfd)
+void upload(int newsockfd)
 {
     char buffer[MAX_LEN] = {0};
     int n;
     char filename[256] = {0};
-    char* text_pos;
+    char* size_pos;
     FILE* out_file;
-    size_t name_len;
+    long filesize;
+    size_t filename_len;
 
-    if (strlen(buff)) {
-        // if we get some stuff with command
-        text_pos = strstr(buff, "\n") + 1;
-        name_len = text_pos - buff - 1;
-        strncpy(filename, buff, name_len);
-        out_file = fopen(filename, "wb");
-        fwrite(text_pos, 1, bsize - name_len - 1, out_file);
+    // if we get no info after command
+    n = read(newsockfd, buffer, MAX_LEN);
+    printf("n = %d\n", n);
+    size_pos = strstr(buffer, "\n");
+    while(!size_pos) {
+        strcat(filename, buffer);
+        n = read(newsockfd, buffer, MAX_LEN);
+        size_pos = strstr(buffer, "\n");
+    }
+    filename_len = size_pos - buffer;
+    strncat(filename, buffer, filename_len);
+    out_file = fopen(filename, "wb");
+    size_pos++;
+
+    filesize= *((long*)size_pos);
+    if (!filesize) {
+        puts("solo name");
+        bzero(buffer, MAX_LEN);
+        n = read(newsockfd, buffer, MAX_LEN);
+        filesize= *((long*)buffer);
+        filesize -= fwrite(buffer + sizeof(filesize), 1, n - sizeof(filesize), out_file);
     }
     else {
-        // if we get no info after command
-        n = read(newsockfd, buffer, MAX_LEN);
-        text_pos = strstr(buffer, "\n") + 1;
-        name_len = text_pos - buffer - 1;
-        strncpy(filename, buffer, name_len);
-        out_file = fopen(filename, "wb");
-        fwrite(text_pos, 1, n - name_len - 1, out_file);
-        bzero(buffer, MAX_LEN);
+        puts("name + stuff");
+        size_t predata = size_pos + sizeof(filesize) - buffer;
+        filesize -= fwrite(size_pos + sizeof(filesize), 1, n - predata, out_file);
     }
+    /** size_t length_pos = strstr(buffer, "\n") + 1; */
 
+    /** if (n == sizeof(filesize)) { */
+    /** char* length_pos = strstr(buffer, "\n") + 1; */
+    /** filesize= *((long*)buffer); */
+    /** n = read(newsockfd, buffer, MAX_LEN); */
+    /** text_pos = strstr(buffer, "\n") + 1; */
+    /** name_len = text_pos - buffer - 1; */
+    /** strncpy(filename, buffer, name_len); */
+    /** filesize -= fwrite(text_pos, 1, n - name_len - 1, out_file); */
+    /** } */
+    /** else { */
+    /**     puts("fsize + stuff"); */
+    /**     filesize= *((long*)buffer); */
+    /**     printf("filesize %zu\n", filesize); */
+    /**     text_pos = strstr(buffer, "\n") + 1; */
+    /**     name_len = text_pos - buffer - 1 - sizeof(filename); */
+    /**     strncpy(filename, buffer + sizeof(filename), name_len); */
+    /**     out_file = fopen(filename, "wb"); */
+    /**     filesize -= fwrite(text_pos, 1, n - name_len - 1 - sizeof(filename), out_file); */
+    /**     bzero(buffer, MAX_LEN); */
+    /** } */
+
+    puts("ok");
     // read from socket to file
-    while((n = read(newsockfd, buffer, MAX_LEN)) > 0) {
-        fwrite(buffer, 1, n, out_file);
+    while (filesize) {
+        n = read(newsockfd, buffer, MAX_LEN);
+        filesize -= fwrite(buffer, 1, n, out_file);
         bzero(buffer, MAX_LEN);
     }
     fclose(out_file);
@@ -74,12 +105,9 @@ void send_time(int newsockfd)
 {
     time_t rawtime;
     struct tm * timeinfo;
-    int n;
-    // time
     time(&rawtime);
     timeinfo = localtime(&rawtime);
-    n = write(newsockfd, asctime(timeinfo), strlen(asctime(timeinfo)));
-    if (n < 0) error("ERROR writing to socket");
+    write(newsockfd, asctime(timeinfo), strlen(asctime(timeinfo)));
 }
 
 int main(int argc, char *argv[])
@@ -127,9 +155,9 @@ int main(int argc, char *argv[])
                     break;
                 }
                 if (!strncmp(buffer, ECHO_STR, strlen(ECHO_STR)))
-                    echo(buffer, newsockfd);
+                    echo(strstr(buffer, "\n") + 1, newsockfd);
                 if (!strncmp(buffer, UPLOAD_STR, strlen(UPLOAD_STR))) {
-                    upload(strstr(buffer, "\n") + 1, n - strlen(UPLOAD_STR), newsockfd);
+                    upload(newsockfd);
                 }
                 if (!strncmp(buffer, TIME_STR, strlen(TIME_STR)))
                     send_time(newsockfd);

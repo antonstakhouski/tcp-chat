@@ -62,6 +62,13 @@ void upload(char* filename, int sockfd)
     strcat(buffer, "\n");
     write(sockfd, buffer, strlen(buffer));
 
+    fseek(file, 0L, SEEK_END);
+    long filesize = ftell(file);
+    printf("%ld\n", filesize);
+    printf("%zu\n", sizeof(filesize));
+    rewind(file);
+    write(sockfd, &filesize, sizeof(filesize));
+
     bzero(buffer, MAX_LEN);
     while (( size = fread(buffer, 1, MAX_LEN, file))) {
         write(sockfd, buffer, size);
