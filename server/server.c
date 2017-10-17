@@ -22,7 +22,6 @@ void error(const char *msg)
 void echo(char* buff, int newsockfd)
 {
     char buffer[MAX_LEN] = {0};
-    puts("echo");
 
     if (strlen(buff))
         puts(buff);
@@ -43,7 +42,6 @@ void upload(int newsockfd)
 
     // if we get no info after command
     n = read(newsockfd, buffer, MAX_LEN);
-    printf("n = %d\n", n);
     size_pos = strstr(buffer, "\n");
     while(!size_pos) {
         strcat(filename, buffer);
@@ -57,41 +55,16 @@ void upload(int newsockfd)
 
     filesize= *((long*)size_pos);
     if (!filesize) {
-        puts("solo name");
         bzero(buffer, MAX_LEN);
         n = read(newsockfd, buffer, MAX_LEN);
         filesize= *((long*)buffer);
         filesize -= fwrite(buffer + sizeof(filesize), 1, n - sizeof(filesize), out_file);
     }
     else {
-        puts("name + stuff");
         size_t predata = size_pos + sizeof(filesize) - buffer;
         filesize -= fwrite(size_pos + sizeof(filesize), 1, n - predata, out_file);
     }
-    /** size_t length_pos = strstr(buffer, "\n") + 1; */
 
-    /** if (n == sizeof(filesize)) { */
-    /** char* length_pos = strstr(buffer, "\n") + 1; */
-    /** filesize= *((long*)buffer); */
-    /** n = read(newsockfd, buffer, MAX_LEN); */
-    /** text_pos = strstr(buffer, "\n") + 1; */
-    /** name_len = text_pos - buffer - 1; */
-    /** strncpy(filename, buffer, name_len); */
-    /** filesize -= fwrite(text_pos, 1, n - name_len - 1, out_file); */
-    /** } */
-    /** else { */
-    /**     puts("fsize + stuff"); */
-    /**     filesize= *((long*)buffer); */
-    /**     printf("filesize %zu\n", filesize); */
-    /**     text_pos = strstr(buffer, "\n") + 1; */
-    /**     name_len = text_pos - buffer - 1 - sizeof(filename); */
-    /**     strncpy(filename, buffer + sizeof(filename), name_len); */
-    /**     out_file = fopen(filename, "wb"); */
-    /**     filesize -= fwrite(text_pos, 1, n - name_len - 1 - sizeof(filename), out_file); */
-    /**     bzero(buffer, MAX_LEN); */
-    /** } */
-
-    puts("ok");
     // read from socket to file
     while (filesize) {
         n = read(newsockfd, buffer, MAX_LEN);

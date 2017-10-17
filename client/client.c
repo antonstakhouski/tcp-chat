@@ -37,7 +37,7 @@ void get_time(int sockfd)
 {
     char buffer[MAX_LEN] = {0};
     read(sockfd, buffer, MAX_LEN);
-    printf("%s\n", buffer);
+    printf("%s", buffer);
 }
 
 void echo(int sockfd)
@@ -64,8 +64,6 @@ void upload(char* filename, int sockfd)
 
     fseek(file, 0L, SEEK_END);
     long filesize = ftell(file);
-    printf("%ld\n", filesize);
-    printf("%zu\n", sizeof(filesize));
     rewind(file);
     write(sockfd, &filesize, sizeof(filesize));
 
