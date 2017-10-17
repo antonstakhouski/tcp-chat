@@ -1,3 +1,3 @@
 #!/bin/bash
 
-./server 12345
+./server 1235

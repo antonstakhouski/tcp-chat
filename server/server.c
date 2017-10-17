@@ -10,6 +10,7 @@
 #include <time.h>
 #include <assert.h>
 #include <stropts.h>
+#include <errno.h>
 
 #include "../constants.h"
 
@@ -129,6 +130,49 @@ int main(int argc, char *argv[])
     bzero((char *) &serv_addr, sizeof(serv_addr));
     portno = atoi(argv[1]);
 
+    int optval;
+    socklen_t optlen = sizeof(optval);
+
+    /* Check the status for the keepalive option */
+    if(getsockopt(sockfd, SOL_SOCKET, SO_KEEPALIVE, &optval, &optlen) < 0) {
+        perror("getsockopt()");
+        close(sockfd);
+        exit(EXIT_FAILURE);
+    }
+    printf("SO_KEEPALIVE is %s\n", (optval ? "ON" : "OFF"));
+
+    /* Set the option active */
+    if (!optval) {
+        optval = 1;
+        optlen = sizeof(optval);
+        if(setsockopt(sockfd, SOL_SOCKET, SO_KEEPALIVE, &optval, optlen) < 0) {
+            perror("setsockopt()");
+            close(sockfd);
+            exit(EXIT_FAILURE);
+        }
+        printf("SO_KEEPALIVE set on socket\n");
+    }
+
+    /* Check the status for the keepalive option */
+    if(getsockopt(sockfd, SOL_TCP, SO_KEEPCNT, &optval, &optlen) < 0) {
+        perror("getsockopt()");
+        close(sockfd);
+        exit(EXIT_FAILURE);
+    }
+    printf("SO_KEEPALIVE is %s\n", (optval ? "ON" : "OFF"));
+
+    /* Set the option active */
+    if (!optval) {
+        optval = 1;
+        optlen = sizeof(optval);
+        if(setsockopt(sockfd, SOL_SOCKET, SO_KEEPALIVE, &optval, optlen) < 0) {
+            perror("setsockopt()");
+            close(sockfd);
+            exit(EXIT_FAILURE);
+        }
+        printf("SO_KEEPALIVE set on socket\n");
+    }
+
     //bind socket
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_addr.s_addr = INADDR_ANY;
@@ -163,6 +207,10 @@ int main(int argc, char *argv[])
                 if (!strncmp(buffer, TIME_STR, strlen(TIME_STR)))
                     send_time(newsockfd);
             }
+            /** else  { */
+            /**     printf("%s\n", strerror(errno)); */
+            /**     exit(0); */
+            /** } */
         }
     }
     close(newsockfd);
