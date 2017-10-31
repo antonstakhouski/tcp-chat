@@ -6,6 +6,7 @@ OBJECTS=$(SOURCES:.c=.o)
 EXECUTABLES=server
 
 all: $(SOURCES) $(EXECUTABLES)
+	bash Makefile.win
 
 server: server.o
 	$(CC) $(LDFLAGS) server.o -o $@
@@ -14,4 +15,4 @@ server: server.o
 	$(CC) $(CFLAGS) $< -o $@
 
 clean:
-	rm $(OBJECTS) $(EXECUTABLES)
+	rm $(OBJECTS) $(EXECUTABLES) server.exe

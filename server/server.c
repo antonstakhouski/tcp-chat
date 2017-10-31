@@ -1,16 +1,5 @@
 /* A simple server in the internet domain using TCP
    The port number is passed as an argument */
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <time.h>
-#include <assert.h>
-#include <stropts.h>
-#include <errno.h>
 
 #include "../constants.h"
 
@@ -27,7 +16,7 @@ void echo(char* buff, int newsockfd)
     if (strlen(buff))
         puts(buff);
 
-    read(newsockfd, buffer, MAX_LEN - 1);
+    recv(newsockfd, buffer, MAX_LEN - 1, 0);
     puts(buffer);
 }
 
@@ -45,7 +34,7 @@ void upload(char* fname, size_t bsize, int newsockfd)
         size_pos = strstr(fname, "\n");
         while(!size_pos) {
             strcat(filename, fname);
-            n = read(newsockfd, fname, MAX_LEN);
+            n = recv(newsockfd, fname, MAX_LEN, 0);
             size_pos = strstr(fname, "\n");
         }
         filename_len = size_pos - fname;
@@ -55,8 +44,8 @@ void upload(char* fname, size_t bsize, int newsockfd)
 
         filesize= *((long*)size_pos);
         if (!filesize) {
-            bzero(buffer, MAX_LEN);
-            n = read(newsockfd, buffer, MAX_LEN);
+            memset(buffer, 0, MAX_LEN);
+            n = recv(newsockfd, buffer, MAX_LEN, 0);
             filesize= *((long*)buffer);
             filesize -= fwrite(buffer + sizeof(filesize),
                     1, n - sizeof(filesize), out_file);
@@ -68,11 +57,11 @@ void upload(char* fname, size_t bsize, int newsockfd)
     }
     else {
         // if we get no info after command
-        n = read(newsockfd, buffer, MAX_LEN);
+        n = recv(newsockfd, buffer, MAX_LEN, 0);
         size_pos = strstr(buffer, "\n");
         while(!size_pos) {
             strcat(filename, buffer);
-            n = read(newsockfd, buffer, MAX_LEN);
+            n = recv(newsockfd, buffer, MAX_LEN, 0);
             size_pos = strstr(buffer, "\n");
         }
         filename_len = size_pos - buffer;
@@ -82,8 +71,8 @@ void upload(char* fname, size_t bsize, int newsockfd)
 
         filesize= *((long*)size_pos);
         if (!filesize) {
-            bzero(buffer, MAX_LEN);
-            n = read(newsockfd, buffer, MAX_LEN);
+            memset(buffer, 0, MAX_LEN);
+            n = recv(newsockfd, buffer, MAX_LEN, 0);
             filesize= *((long*)buffer);
             filesize -= fwrite(buffer + sizeof(filesize),
                     1, n - sizeof(filesize), out_file);
@@ -95,9 +84,9 @@ void upload(char* fname, size_t bsize, int newsockfd)
     }
     // read from socket to file
     while (filesize) {
-        n = read(newsockfd, buffer, MAX_LEN);
+        n = recv(newsockfd, buffer, MAX_LEN, 0);
         filesize -= fwrite(buffer, 1, n, out_file);
-        bzero(buffer, MAX_LEN);
+        memset(buffer, 0, MAX_LEN);
     }
     fclose(out_file);
 }
@@ -108,7 +97,7 @@ void send_time(int newsockfd)
     struct tm * timeinfo;
     time(&rawtime);
     timeinfo = localtime(&rawtime);
-    write(newsockfd, asctime(timeinfo), strlen(asctime(timeinfo)));
+    send(newsockfd, asctime(timeinfo), strlen(asctime(timeinfo)), 0);
 }
 
 int main(int argc, char *argv[])
@@ -127,50 +116,43 @@ int main(int argc, char *argv[])
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd < 0)
         error("ERROR opening socket");
-    bzero((char *) &serv_addr, sizeof(serv_addr));
+    memset((char *) &serv_addr, 0, sizeof(serv_addr));
     portno = atoi(argv[1]);
 
     int optval;
     socklen_t optlen = sizeof(optval);
 
+    /* Set the option active */
+    optval = 1;
+    optlen = sizeof(optval);
+    if(setsockopt(sockfd, SOL_SOCKET, SO_KEEPALIVE, &optval, optlen) < 0) {
+        perror("setsockopt()");
+        close(sockfd);
+        exit(EXIT_FAILURE);
+    }
+
+    optval = 3;
     /* Check the status for the keepalive option */
-    if(getsockopt(sockfd, SOL_SOCKET, SO_KEEPALIVE, &optval, &optlen) < 0) {
+    if(getsockopt(sockfd, IPPROTO_TCP, TCP_KEEPCNT, &optval, &optlen) < 0) {
         perror("getsockopt()");
         close(sockfd);
         exit(EXIT_FAILURE);
     }
-    printf("SO_KEEPALIVE is %s\n", (optval ? "ON" : "OFF"));
 
-    /* Set the option active */
-    if (!optval) {
-        optval = 1;
-        optlen = sizeof(optval);
-        if(setsockopt(sockfd, SOL_SOCKET, SO_KEEPALIVE, &optval, optlen) < 0) {
-            perror("setsockopt()");
-            close(sockfd);
-            exit(EXIT_FAILURE);
-        }
-        printf("SO_KEEPALIVE set on socket\n");
-    }
-
+    optval = 5;
     /* Check the status for the keepalive option */
-    if(getsockopt(sockfd, SOL_TCP, SO_KEEPCNT, &optval, &optlen) < 0) {
+    if(getsockopt(sockfd, IPPROTO_TCP, TCP_KEEPIDLE, &optval, &optlen) < 0) {
         perror("getsockopt()");
         close(sockfd);
         exit(EXIT_FAILURE);
     }
-    printf("SO_KEEPALIVE is %s\n", (optval ? "ON" : "OFF"));
 
-    /* Set the option active */
-    if (!optval) {
-        optval = 1;
-        optlen = sizeof(optval);
-        if(setsockopt(sockfd, SOL_SOCKET, SO_KEEPALIVE, &optval, optlen) < 0) {
-            perror("setsockopt()");
-            close(sockfd);
-            exit(EXIT_FAILURE);
-        }
-        printf("SO_KEEPALIVE set on socket\n");
+    optval = 2;
+    /* Check the status for the keepalive option */
+    if(getsockopt(sockfd, IPPROTO_TCP, TCP_KEEPINTVL, &optval, &optlen) < 0) {
+        perror("getsockopt()");
+        close(sockfd);
+        exit(EXIT_FAILURE);
     }
 
     //bind socket
@@ -192,8 +174,8 @@ int main(int argc, char *argv[])
             error("ERROR on accept");
 
         while (1) {
-            bzero(buffer,MAX_LEN);
-            if ((n = read(newsockfd, buffer, MAX_LEN)) > 0) {
+            memset(buffer, 0, MAX_LEN);
+            if ((n = recv(newsockfd, buffer, MAX_LEN, 0)) > 0) {
                 if (!strncmp(buffer, CLOSE_STR, strlen(CLOSE_STR))) {
                     close(newsockfd);
                     break;

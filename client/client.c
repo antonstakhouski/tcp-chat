@@ -1,14 +1,4 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <string.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <netdb.h>
-#include <assert.h>
-
-#include "../constants.h"
+#include "../cross_header.h"
 
 void error(const char *msg)
 {
@@ -36,7 +26,7 @@ void get_cmd(int opcode, char* cmd)
 void get_time(int sockfd)
 {
     char buffer[MAX_LEN] = {0};
-    read(sockfd, buffer, MAX_LEN);
+    recv(sockfd, buffer, MAX_LEN, 0);
     printf("%s", buffer);
 }
 
@@ -44,7 +34,7 @@ void echo(int sockfd)
 {
     char buffer[MAX_LEN];
     scanf("%s", buffer);
-    write(sockfd, buffer, strlen(buffer));
+    send(sockfd, buffer, strlen(buffer), 0);
 }
 
 void upload(char* filename, int sockfd)
@@ -56,22 +46,22 @@ void upload(char* filename, int sockfd)
         puts("error opening file");
         return;
     }
-    /** write(sockfd, UPLOAD_STR, strlen(UPLOAD_STR)); */
+    /** send(sockfd, UPLOAD_STR, strlen(UPLOAD_STR), 0); */
     size_t size = 0;
-    bzero(buffer, MAX_LEN);
+    memset(buffer, 0, MAX_LEN);
     strcpy(buffer, filename);
     strcat(buffer, "\n");
-    write(sockfd, buffer, strlen(buffer));
+    send(sockfd, buffer, strlen(buffer), 0);
 
     fseek(file, 0L, SEEK_END);
     long filesize = ftell(file);
     rewind(file);
-    write(sockfd, &filesize, sizeof(filesize));
+    send(sockfd, (char*)(&filesize), sizeof(filesize), 0);
 
-    bzero(buffer, MAX_LEN);
+    memset(buffer, 0, MAX_LEN);
     while (( size = fread(buffer, 1, MAX_LEN, file))) {
-        write(sockfd, buffer, size);
-        bzero(buffer, MAX_LEN);
+        send(sockfd, buffer, size, 0);
+        memset(buffer, 0, MAX_LEN);
     }
     fclose(file);
 }
@@ -108,10 +98,10 @@ int main(int argc, char *argv[])
     }
 
     //bind socket
-    bzero((char *) &serv_addr, sizeof(serv_addr));
+    memset((char *) &serv_addr, 0, sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;
-    bcopy((char *)server->h_addr,
-         (char *)&serv_addr.sin_addr.s_addr,
+    memcpy((char *)&serv_addr.sin_addr.s_addr,
+            (char *)server->h_addr,
          server->h_length);
     serv_addr.sin_port = htons(portno);
     if (connect(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0)
@@ -128,7 +118,7 @@ int main(int argc, char *argv[])
             res = scanf("%d", &choize);
         get_cmd(choize, cmd);
         /** if (strcmp(cmd, CLOSE_STR)) */
-            write(sockfd, cmd, strlen(cmd));
+        send(sockfd, cmd, strlen(cmd), 0);
 
 
         if (!strcmp(cmd, TIME_STR))
@@ -142,7 +132,7 @@ int main(int argc, char *argv[])
             upload(filename, sockfd);
         }
         if (!strcmp(cmd, CLOSE_STR)) {
-            close(sockfd);
+            close_sock(sockfd);
             return 0;
         }
     }
