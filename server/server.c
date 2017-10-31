@@ -17,6 +17,7 @@ void echo(char* buff, int newsockfd)
         puts(buff);
 
     recv(newsockfd, buffer, MAX_LEN - 1, 0);
+    send(newsockfd, buffer, strlen(buffer), 0);
     puts(buffer);
 }
 
@@ -102,6 +103,7 @@ void send_time(int newsockfd)
 
 int main(int argc, char *argv[])
 {
+    init();
     int sockfd, newsockfd, portno;
     socketlen clilen;
     char buffer[MAX_LEN];
@@ -192,5 +194,6 @@ int main(int argc, char *argv[])
     }
     close_sock(newsockfd);
     close_sock(sockfd);
+    clear();
     return 0;
 }

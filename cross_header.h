@@ -29,6 +29,8 @@ typedef socklen_t socketlen;
 #endif
 
 int close_sock(int sockfd);
+void init();
+void clear();
 
 #define MAX_LEN 1432
 #define CLOSE_STR "CLOSE\n"

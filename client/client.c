@@ -35,6 +35,8 @@ void echo(int sockfd)
     char buffer[MAX_LEN];
     scanf("%s", buffer);
     send(sockfd, buffer, strlen(buffer), 0);
+    recv(sockfd, buffer, MAX_LEN, 0);
+    printf("%s\n", buffer);
 }
 
 void upload(char* filename, int sockfd)
@@ -77,6 +79,7 @@ void show_help()
 
 int main(int argc, char *argv[])
 {
+    init();
     int sockfd, portno;
     struct sockaddr_in serv_addr;
     struct hostent *server;
@@ -130,9 +133,11 @@ int main(int argc, char *argv[])
         }
         if (!strcmp(cmd, CLOSE_STR)) {
             close_sock(sockfd);
+            clear();
             return 0;
         }
     }
 
+    clear();
     return 0;
 }
