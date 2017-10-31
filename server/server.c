@@ -119,42 +119,8 @@ int main(int argc, char *argv[])
     memset((char *) &serv_addr, 0, sizeof(serv_addr));
     portno = atoi(argv[1]);
 
-    /** int optval; */
-    /** socklen_t optlen = sizeof(optval); */
-    /**  */
-    /* Set the option active */
-    /** optval = 1; */
-    /** optlen = sizeof(optval); */
-    /** if(setsockopt(sockfd, SOL_SOCKET, SO_KEEPALIVE, &optval, optlen) < 0) { */
-    /**     perror("setsockopt()"); */
-    /**     close(sockfd); */
-    /**     exit(EXIT_FAILURE); */
-    /** } */
-    /**  */
-    /** optval = 3; */
-    /* Check the status for the keepalive option */
-    /** if(getsockopt(sockfd, IPPROTO_TCP, TCP_KEEPCNT, &optval, &optlen) < 0) { */
-    /**     perror("getsockopt()"); */
-    /**     close(sockfd); */
-    /**     exit(EXIT_FAILURE); */
-    /** } */
-    /**  */
-    /** optval = 5; */
-    /* Check the status for the keepalive option */
-    /** if(getsockopt(sockfd, IPPROTO_TCP, TCP_KEEPIDLE, &optval, &optlen) < 0) { */
-    /**     perror("getsockopt()"); */
-    /**     close(sockfd); */
-    /**     exit(EXIT_FAILURE); */
-    /** } */
-    /**  */
-    /** optval = 2; */
-    /* Check the status for the keepalive option */
-    /** if(getsockopt(sockfd, IPPROTO_TCP, TCP_KEEPINTVL, &optval, &optlen) < 0) { */
-    /**     perror("getsockopt()"); */
-    /**     close(sockfd); */
-    /**     exit(EXIT_FAILURE); */
-    /** } */
-    /**  */
+    set_keepalive(sockfd);
+
     //bind socket
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_addr.s_addr = INADDR_ANY;

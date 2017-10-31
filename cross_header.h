@@ -10,6 +10,7 @@
 #if defined(_WIN32) || defined(_WIN64)
 
 #include <winsock2.h>
+#include <mstcpip.h>
 #define PLATFORM PLATFORM_WIN
 typedef int socketlen;
 
@@ -31,6 +32,7 @@ typedef socklen_t socketlen;
 int close_sock(int sockfd);
 void init();
 void clear();
+void set_keepalive(int sockfd);
 
 #define MAX_LEN 1432
 #define CLOSE_STR "CLOSE\n"

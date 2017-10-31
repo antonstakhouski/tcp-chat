@@ -98,6 +98,8 @@ int main(int argc, char *argv[])
         exit(0);
     }
 
+    set_keepalive(sockfd);
+
     //bind socket
     memset((char *) &serv_addr, 0, sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;

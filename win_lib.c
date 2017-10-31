@@ -18,3 +18,19 @@ void clear()
 {
     WSACleanup();
 }
+
+
+void set_keepalive(int sockfd)
+{
+    struct tcp_keepalive alive;
+	alive.onoff = 1;
+	alive.keepaliveinterval = 2;
+	alive.keepalivetime = 30000;
+	DWORD ret;
+
+	if (WSAIoctl(sockfd, SIO_KEEPALIVE_VALS, &alive, sizeof(alive), NULL, 0, &ret, NULL, NULL) == SOCKET_ERROR)
+	{
+    	printf("ERROR KEEPALIVE\n");
+	}
+}
+
