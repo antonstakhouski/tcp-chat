@@ -1,7 +1,7 @@
 /* A simple server in the internet domain using TCP
    The port number is passed as an argument */
 
-#include "../constants.h"
+#include "../cross_header.h"
 
 void error(const char *msg)
 {
@@ -103,7 +103,7 @@ void send_time(int newsockfd)
 int main(int argc, char *argv[])
 {
     int sockfd, newsockfd, portno;
-    socklen_t clilen;
+    socketlen clilen;
     char buffer[MAX_LEN];
     struct sockaddr_in serv_addr, cli_addr;
     int n;
@@ -114,54 +114,51 @@ int main(int argc, char *argv[])
 
     //create socket
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sockfd < 0)
-        error("ERROR opening socket");
     memset((char *) &serv_addr, 0, sizeof(serv_addr));
     portno = atoi(argv[1]);
 
-    int optval;
-    socklen_t optlen = sizeof(optval);
-
+    /** int optval; */
+    /** socklen_t optlen = sizeof(optval); */
+    /**  */
     /* Set the option active */
-    optval = 1;
-    optlen = sizeof(optval);
-    if(setsockopt(sockfd, SOL_SOCKET, SO_KEEPALIVE, &optval, optlen) < 0) {
-        perror("setsockopt()");
-        close(sockfd);
-        exit(EXIT_FAILURE);
-    }
-
-    optval = 3;
+    /** optval = 1; */
+    /** optlen = sizeof(optval); */
+    /** if(setsockopt(sockfd, SOL_SOCKET, SO_KEEPALIVE, &optval, optlen) < 0) { */
+    /**     perror("setsockopt()"); */
+    /**     close(sockfd); */
+    /**     exit(EXIT_FAILURE); */
+    /** } */
+    /**  */
+    /** optval = 3; */
     /* Check the status for the keepalive option */
-    if(getsockopt(sockfd, IPPROTO_TCP, TCP_KEEPCNT, &optval, &optlen) < 0) {
-        perror("getsockopt()");
-        close(sockfd);
-        exit(EXIT_FAILURE);
-    }
-
-    optval = 5;
+    /** if(getsockopt(sockfd, IPPROTO_TCP, TCP_KEEPCNT, &optval, &optlen) < 0) { */
+    /**     perror("getsockopt()"); */
+    /**     close(sockfd); */
+    /**     exit(EXIT_FAILURE); */
+    /** } */
+    /**  */
+    /** optval = 5; */
     /* Check the status for the keepalive option */
-    if(getsockopt(sockfd, IPPROTO_TCP, TCP_KEEPIDLE, &optval, &optlen) < 0) {
-        perror("getsockopt()");
-        close(sockfd);
-        exit(EXIT_FAILURE);
-    }
-
-    optval = 2;
+    /** if(getsockopt(sockfd, IPPROTO_TCP, TCP_KEEPIDLE, &optval, &optlen) < 0) { */
+    /**     perror("getsockopt()"); */
+    /**     close(sockfd); */
+    /**     exit(EXIT_FAILURE); */
+    /** } */
+    /**  */
+    /** optval = 2; */
     /* Check the status for the keepalive option */
-    if(getsockopt(sockfd, IPPROTO_TCP, TCP_KEEPINTVL, &optval, &optlen) < 0) {
-        perror("getsockopt()");
-        close(sockfd);
-        exit(EXIT_FAILURE);
-    }
-
+    /** if(getsockopt(sockfd, IPPROTO_TCP, TCP_KEEPINTVL, &optval, &optlen) < 0) { */
+    /**     perror("getsockopt()"); */
+    /**     close(sockfd); */
+    /**     exit(EXIT_FAILURE); */
+    /** } */
+    /**  */
     //bind socket
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_addr.s_addr = INADDR_ANY;
     serv_addr.sin_port = htons(portno);
-    if (bind(sockfd, (struct sockaddr *) &serv_addr,
-                sizeof(serv_addr)) < 0)
-        error("ERROR on binding");
+    bind(sockfd, (struct sockaddr *) &serv_addr,
+                sizeof(serv_addr));
 
     //listen
     listen(sockfd, 5);
@@ -170,14 +167,12 @@ int main(int argc, char *argv[])
         newsockfd = accept(sockfd,
                 (struct sockaddr *) &cli_addr,
                 &clilen);
-        if (newsockfd < 0)
-            error("ERROR on accept");
 
         while (1) {
             memset(buffer, 0, MAX_LEN);
             if ((n = recv(newsockfd, buffer, MAX_LEN, 0)) > 0) {
                 if (!strncmp(buffer, CLOSE_STR, strlen(CLOSE_STR))) {
-                    close(newsockfd);
+                    close_sock(newsockfd);
                     break;
                 }
                 if (!strncmp(buffer, ECHO_STR, strlen(ECHO_STR)))
@@ -195,7 +190,7 @@ int main(int argc, char *argv[])
             /** } */
         }
     }
-    close(newsockfd);
-    close(sockfd);
+    close_sock(newsockfd);
+    close_sock(sockfd);
     return 0;
 }

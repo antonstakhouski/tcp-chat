@@ -1,10 +1,17 @@
 #define PLATFORM_WIN 1
 #define PLATFORM_UNIX 2
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include <errno.h>
+
 #if defined(_WIN32) || defined(_WIN64)
 
 #include <winsock2.h>
 #define PLATFORM PLATFORM_WIN
+typedef int socketlen;
 
 #else
 
@@ -17,13 +24,9 @@
 #include <netdb.h>
 #define PLATFORM PLATFORM_UNIX
 
-#endif
+typedef socklen_t socketlen;
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <time.h>
-#include <errno.h>
+#endif
 
 int close_sock(int sockfd);
 
