@@ -48,17 +48,18 @@ void upload(char* filename, int sockfd)
         puts("error opening file");
         return;
     }
-    /** send(sockfd, UPLOAD_STR, strlen(UPLOAD_STR), 0); */
     size_t size = 0;
     memset(buffer, 0, MAX_LEN);
     strcpy(buffer, filename);
     strcat(buffer, "\n");
-    send(sockfd, buffer, strlen(buffer), 0);
 
     fseek(file, 0L, SEEK_END);
     long filesize = ftell(file);
     rewind(file);
-    send(sockfd, (char*)(&filesize), sizeof(filesize), 0);
+    int char_end = strlen(buffer);
+    memcpy(buffer + char_end, &filesize, sizeof(filesize));
+    printf("Filesize: %ld\n", filesize);
+    send(sockfd, buffer, char_end + sizeof(filesize), 0);
 
     memset(buffer, 0, MAX_LEN);
     while (( size = fread(buffer, 1, MAX_LEN, file))) {

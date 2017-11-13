@@ -9,19 +9,22 @@ void error(const char *msg)
     exit(1);
 }
 
-void echo(char* buff, int newsockfd)
+int echo(char* buff, int newsockfd)
 {
     char buffer[MAX_LEN] = {0};
 
     if (strlen(buff))
         puts(buff);
 
-    recv(newsockfd, buffer, MAX_LEN - 1, 0);
-    send(newsockfd, buffer, strlen(buffer), 0);
+    if (recv(newsockfd, buffer, MAX_LEN - 1, 0) < 0)
+        return -1;
+    if (send(newsockfd, buffer, strlen(buffer), 0) < 0)
+        return -1;
     puts(buffer);
+    return 0;
 }
 
-void upload(char* fname, size_t bsize, int newsockfd)
+int upload(int newsockfd)
 {
     char buffer[MAX_LEN] = {0};
     int n;
@@ -30,75 +33,77 @@ void upload(char* fname, size_t bsize, int newsockfd)
     FILE* out_file;
     long filesize;
     size_t filename_len;
+    fd_set set, set_error;
+    struct timeval timeleft = {30, 0};
+    int res;
 
-    if (strlen(fname)) {
-        size_pos = strstr(fname, "\n");
-        while(!size_pos) {
-            strcat(filename, fname);
-            n = recv(newsockfd, fname, MAX_LEN, 0);
-            size_pos = strstr(fname, "\n");
-        }
-        filename_len = size_pos - fname;
-        strncat(filename, fname, filename_len);
-        out_file = fopen(filename, "wb");
-        size_pos++;
+    FD_ZERO(&set);
+    FD_ZERO(&set_error);
+    FD_SET(newsockfd, &set);
+    FD_SET(newsockfd, &set_error);
 
-        filesize= *((long*)size_pos);
-        if (!filesize) {
-            memset(buffer, 0, MAX_LEN);
-            n = recv(newsockfd, buffer, MAX_LEN, 0);
-            filesize= *((long*)buffer);
-            filesize -= fwrite(buffer + sizeof(filesize),
-                    1, n - sizeof(filesize), out_file);
-        }
-        else {
-            size_t predata = size_pos + sizeof(filesize) - fname;
-            filesize -= fwrite(size_pos + sizeof(filesize), 1, bsize - predata, out_file);
-        }
+    // if we get no info after command
+    if ((n = recv(newsockfd, buffer, MAX_LEN, 0)) < 0) {
+        printf("Error: %s", strerror(n));
+        return -1;
     }
-    else {
-        // if we get no info after command
-        n = recv(newsockfd, buffer, MAX_LEN, 0);
-        size_pos = strstr(buffer, "\n");
-        while(!size_pos) {
-            strcat(filename, buffer);
-            n = recv(newsockfd, buffer, MAX_LEN, 0);
-            size_pos = strstr(buffer, "\n");
-        }
-        filename_len = size_pos - buffer;
-        strncat(filename, buffer, filename_len);
-        out_file = fopen(filename, "wb");
-        size_pos++;
+    size_pos = strstr(buffer, "\n");
+    filename_len = size_pos - buffer;
+    strncat(filename, buffer, filename_len);
+    printf("Filename: %s\n", filename);
+    printf("Packet length: %d\n", n);
+    out_file = fopen(filename, "wb");
+    size_pos++;
 
-        filesize= *((long*)size_pos);
-        if (!filesize) {
-            memset(buffer, 0, MAX_LEN);
-            n = recv(newsockfd, buffer, MAX_LEN, 0);
-            filesize= *((long*)buffer);
-            filesize -= fwrite(buffer + sizeof(filesize),
-                    1, n - sizeof(filesize), out_file);
-        }
-        else {
-            size_t predata = size_pos + sizeof(filesize) - buffer;
-            filesize -= fwrite(size_pos + sizeof(filesize), 1, n - predata, out_file);
-        }
-    }
+    filesize= *((long*)size_pos);
+    printf("Filesize: %ld\n", filesize);
+    size_t predata = size_pos + sizeof(filesize) - buffer;
+    filesize -= fwrite(size_pos + sizeof(filesize), 1, n - predata, out_file);
+
     // read from socket to file
     while (filesize) {
-        n = recv(newsockfd, buffer, MAX_LEN, 0);
-        filesize -= fwrite(buffer, 1, n, out_file);
+        /** if ((res = select( newsockfd + 1, &set, NULL, &set_error, &timeleft)) < 0) { */
+        /**     printf("Error: %s", strerror(res)); */
+        /** } */
+        /**  */
+        /** if (FD_ISSET(newsockfd, &set_error)) { */
+        /**     memset(buffer, 0, MAX_LEN); */
+        /**     if ((n = recv(newsockfd, buffer, MAX_LEN, MSG_OOB)) < 0) { */
+        /**         printf("Error: %s\n", strerror(n)); */
+        /**         return -1; */
+        /**     } */
+        /**     else{ */
+        /**         printf("%s\n", buffer); */
+        /**     } */
+        /** } else if (!FD_ISSET(newsockfd, &set)) { */
+        /**     printf("Transfer error\n"); */
+        /**     close_sock(newsockfd); */
+        /**     fclose(out_file); */
+        /**     return -1; */
+        /** } */
+
         memset(buffer, 0, MAX_LEN);
+        if ((n = recv(newsockfd, buffer, MAX_LEN, 0)) < 0) {
+            printf("Error: %s", strerror(n));
+            return -1;
+        }
+        filesize -= fwrite(buffer, 1, n, out_file);
+        FD_CLR(newsockfd, &set);
+        FD_CLR(newsockfd, &set_error);
     }
     fclose(out_file);
+    return 0;
 }
 
-void send_time(int newsockfd)
+int send_time(int newsockfd)
 {
     time_t rawtime;
     struct tm * timeinfo;
     time(&rawtime);
     timeinfo = localtime(&rawtime);
-    send(newsockfd, asctime(timeinfo), strlen(asctime(timeinfo)), 0);
+    if(send(newsockfd, asctime(timeinfo), strlen(asctime(timeinfo)), 0) < 0)
+        return -1;
+    return 0;
 }
 
 int main(int argc, char *argv[])
@@ -126,7 +131,7 @@ int main(int argc, char *argv[])
     serv_addr.sin_addr.s_addr = INADDR_ANY;
     serv_addr.sin_port = htons(portno);
     bind(sockfd, (struct sockaddr *) &serv_addr,
-                sizeof(serv_addr));
+            sizeof(serv_addr));
 
     //listen
     listen(sockfd, 5);
@@ -139,23 +144,24 @@ int main(int argc, char *argv[])
         while (1) {
             memset(buffer, 0, MAX_LEN);
             if ((n = recv(newsockfd, buffer, MAX_LEN, 0)) > 0) {
+                if (n < 0)
+                    break;
                 if (!strncmp(buffer, CLOSE_STR, strlen(CLOSE_STR))) {
-                    close_sock(newsockfd);
+                    if (close_sock(newsockfd) < 0)
+                        break;
                     break;
                 }
                 if (!strncmp(buffer, ECHO_STR, strlen(ECHO_STR)))
-                    echo(strstr(buffer, "\n") + 1, newsockfd);
+                    if (echo(strstr(buffer, "\n") + 1, newsockfd) < 0)
+                        break;
                 if (!strncmp(buffer, UPLOAD_STR, strlen(UPLOAD_STR))) {
-                    char* fname = strstr(buffer, "\n") + 1;
-                    upload(fname, n - (fname - buffer), newsockfd);
+                    if(upload(newsockfd) < 0)
+                        break;;
                 }
                 if (!strncmp(buffer, TIME_STR, strlen(TIME_STR)))
-                    send_time(newsockfd);
+                    if (send_time(newsockfd) < 0 )
+                        break;
             }
-            /** else  { */
-            /**     printf("%s\n", strerror(errno)); */
-            /**     exit(0); */
-            /** } */
         }
     }
     close_sock(newsockfd);

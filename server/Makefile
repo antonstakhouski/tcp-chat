@@ -7,8 +7,8 @@ OBJECTS=$(SOURCES:.c=.o)
 EXECUTABLES=server
 
 all: $(SOURCES) $(EXECUTABLES)
-	bash Makefile.win
-	cp server.exe ~/"PlayOnLinux's virtual drives"/cygwin/drive_c/
+	# bash Makefile.win
+	# cp server.exe ~/"PlayOnLinux's virtual drives"/cygwin/drive_c/
 
 server: server.o $(LIBRARY).o
 	$(CC) $(LDFLAGS) server.o $(LIBRARY).o -o $@
@@ -16,7 +16,7 @@ server: server.o $(LIBRARY).o
 .c.o:
 	$(CC) $(CFLAGS) $< -o $@
 
-$(LIBRARY).o: ../$(LIBRARY).c
+$(LIBRARY).o: ../$(LIBRARY).c ../cross_header.h
 	$(CC) $(CFLAGS) ../$(LIBRARY).c -o $(LIBRARY).o
 
 clean:

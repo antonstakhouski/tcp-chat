@@ -19,10 +19,11 @@ typedef int socketlen;
 #include <netinet/tcp.h>
 #include <stropts.h>
 #include <unistd.h>
-#include <sys/types.h>
-#include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/select.h>
 #define PLATFORM PLATFORM_UNIX
 
 typedef socklen_t socketlen;
