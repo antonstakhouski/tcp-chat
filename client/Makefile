@@ -7,8 +7,7 @@ OBJECTS=$(SOURCES:.c=.o)
 EXECUTABLES=client
 
 all: $(SOURCES) $(EXECUTABLES)
-	# bash Makefile.win
-	# cp client.exe ~/"PlayOnLinux's virtual drives"/cygwin/drive_c/
+	bash win_rules.mk
 
 client: client.o $(LIBRARY).o
 	$(CC) $(LDFLAGS) client.o $(LIBRARY).o -o $@

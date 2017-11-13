@@ -88,7 +88,7 @@ void upload(char* filename, int sockfd)
             return;
         } else {
             printf("OOB data: %d\n", procents);
-            sleep(1);
+            /** sleep(1); */
         }
     }
     fclose(file);

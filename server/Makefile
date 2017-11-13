@@ -7,8 +7,7 @@ OBJECTS=$(SOURCES:.c=.o)
 EXECUTABLES=server
 
 all: $(SOURCES) $(EXECUTABLES)
-	# bash Makefile.win
-	# cp server.exe ~/"PlayOnLinux's virtual drives"/cygwin/drive_c/
+	bash win_rules.mk
 
 server: server.o $(LIBRARY).o
 	$(CC) $(LDFLAGS) server.o $(LIBRARY).o -o $@
