@@ -43,6 +43,9 @@ void upload(char* filename, int sockfd)
 {
     FILE* file;
     char buffer[MAX_LEN];
+    int bytes_sent = 0;
+    int res = 0;
+    int data_sent = 0;
 
     if(!(file = fopen(filename, "rb"))) {
         puts("error opening file");
@@ -59,12 +62,34 @@ void upload(char* filename, int sockfd)
     int char_end = strlen(buffer);
     memcpy(buffer + char_end, &filesize, sizeof(filesize));
     printf("Filesize: %ld\n", filesize);
-    send(sockfd, buffer, char_end + sizeof(filesize), 0);
+    if ((res = send(sockfd, buffer, char_end + sizeof(filesize), 0)) < 0) {
+        printf("Error %s\n", strerror(res));
+        return;
+    } else {
+        bytes_sent += res;
+        printf("%d bytes sent\n", bytes_sent);
+    }
 
     memset(buffer, 0, MAX_LEN);
     while (( size = fread(buffer, 1, MAX_LEN, file))) {
-        send(sockfd, buffer, size, 0);
+        if ((res = send(sockfd, buffer, size, 0)) < 0) {
+            printf("Error %s\n", strerror(res));
+            return;
+        } else {
+            bytes_sent += res;
+            data_sent += res;
+            printf("%d bytes sent\n", bytes_sent);
+        }
         memset(buffer, 0, MAX_LEN);
+
+        char procents = ((data_sent * 100) / filesize) % 10;
+        if ((res = send(sockfd, (char*)&procents, sizeof(procents), MSG_OOB)) < 0) {
+            printf("Error %s\n", strerror(res));
+            return;
+        } else {
+            printf("OOB data: %d\n", procents);
+            sleep(1);
+        }
     }
     fclose(file);
 }
@@ -108,7 +133,7 @@ int main(int argc, char *argv[])
             (char *)server->h_addr,
          server->h_length);
     serv_addr.sin_port = htons(portno);
-    connect(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
+    assert(!connect(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)));
 
     int choize;
     char cmd[256];
@@ -120,7 +145,6 @@ int main(int argc, char *argv[])
         while(!res || choize < 0 || choize > 3)
             res = scanf("%d", &choize);
         get_cmd(choize, cmd);
-        /** if (strcmp(cmd, CLOSE_STR)) */
         send(sockfd, cmd, strlen(cmd), 0);
 
 

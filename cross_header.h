@@ -6,6 +6,7 @@
 #include <string.h>
 #include <time.h>
 #include <errno.h>
+#include <assert.h>
 
 #if defined(_WIN32) || defined(_WIN64)
 

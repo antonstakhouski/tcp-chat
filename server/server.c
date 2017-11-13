@@ -36,17 +36,14 @@ int upload(int newsockfd)
     fd_set set, set_error;
     struct timeval timeleft = {30, 0};
     int res;
-
-    FD_ZERO(&set);
-    FD_ZERO(&set_error);
-    FD_SET(newsockfd, &set);
-    FD_SET(newsockfd, &set_error);
+    int bytes_received = 0;
 
     // if we get no info after command
     if ((n = recv(newsockfd, buffer, MAX_LEN, 0)) < 0) {
         printf("Error: %s", strerror(n));
         return -1;
     }
+    bytes_received += n;
     size_pos = strstr(buffer, "\n");
     filename_len = size_pos - buffer;
     strncat(filename, buffer, filename_len);
@@ -59,34 +56,39 @@ int upload(int newsockfd)
     printf("Filesize: %ld\n", filesize);
     size_t predata = size_pos + sizeof(filesize) - buffer;
     filesize -= fwrite(size_pos + sizeof(filesize), 1, n - predata, out_file);
+    printf("Received %d bytes\n", bytes_received);
 
     // read from socket to file
-    while (filesize) {
-        /** if ((res = select( newsockfd + 1, &set, NULL, &set_error, &timeleft)) < 0) { */
-        /**     printf("Error: %s", strerror(res)); */
-        /** } */
-        /**  */
-        /** if (FD_ISSET(newsockfd, &set_error)) { */
-        /**     memset(buffer, 0, MAX_LEN); */
-        /**     if ((n = recv(newsockfd, buffer, MAX_LEN, MSG_OOB)) < 0) { */
-        /**         printf("Error: %s\n", strerror(n)); */
-        /**         return -1; */
-        /**     } */
-        /**     else{ */
-        /**         printf("%s\n", buffer); */
-        /**     } */
-        /** } else if (!FD_ISSET(newsockfd, &set)) { */
-        /**     printf("Transfer error\n"); */
-        /**     close_sock(newsockfd); */
-        /**     fclose(out_file); */
-        /**     return -1; */
-        /** } */
+    while (filesize > 0) {
+        FD_SET(newsockfd, &set);
+        FD_SET(newsockfd, &set_error);
+        if ((res = select( newsockfd + 1, &set, NULL, &set_error, &timeleft)) < 0) {
+            printf("Error: %s", strerror(res));
+        }
+
+        if (FD_ISSET(newsockfd, &set_error)) {
+            memset(buffer, 0, MAX_LEN);
+            if ((n = recv(newsockfd, buffer, MAX_LEN, MSG_OOB)) < 0) {
+                printf("Error: %s\n", strerror(n));
+                return -1;
+            }
+            else{
+                printf("OOB data: %d\n", *((int *)buffer));
+            }
+        } else if (!FD_ISSET(newsockfd, &set)) {
+            printf("Transfer error\n");
+            close_sock(newsockfd);
+            fclose(out_file);
+            return -1;
+        }
 
         memset(buffer, 0, MAX_LEN);
         if ((n = recv(newsockfd, buffer, MAX_LEN, 0)) < 0) {
             printf("Error: %s", strerror(n));
             return -1;
         }
+        bytes_received += n;
+        printf("Received %d bytes\n", bytes_received);
         filesize -= fwrite(buffer, 1, n, out_file);
         FD_CLR(newsockfd, &set);
         FD_CLR(newsockfd, &set_error);
@@ -99,6 +101,7 @@ int send_time(int newsockfd)
 {
     time_t rawtime;
     struct tm * timeinfo;
+    puts("Time sent");
     time(&rawtime);
     timeinfo = localtime(&rawtime);
     if(send(newsockfd, asctime(timeinfo), strlen(asctime(timeinfo)), 0) < 0)
@@ -130,8 +133,7 @@ int main(int argc, char *argv[])
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_addr.s_addr = INADDR_ANY;
     serv_addr.sin_port = htons(portno);
-    bind(sockfd, (struct sockaddr *) &serv_addr,
-            sizeof(serv_addr));
+    assert(!bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)));
 
     //listen
     listen(sockfd, 5);
