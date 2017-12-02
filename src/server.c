@@ -1,7 +1,7 @@
 /* A simple server in the internet domain using TCP
    The port number is passed as an argument */
 
-#include "../../cross_header.h"
+#include "cross_header.h"
 
 void error(const char *msg)
 {

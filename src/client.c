@@ -1,4 +1,4 @@
-#include "../../cross_header.h"
+#include "cross_header.h"
 
 void error(const char *msg)
 {
