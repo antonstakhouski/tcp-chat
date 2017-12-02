@@ -48,12 +48,14 @@ arm-client:
 	$(eval CC := arm-linux-gnueabihf-gcc)
 	$(eval SOURCES := client.c unix_lib.c)
 	@$(MAKE) -f Makefile EXECUTABLE=$(EXECUTABLE) CC=$(CC) SOURCES="$(SOURCES)"
+	sshpass -p "temppwd" scp $(BUILDDIR)/$(EXECUTABLE) debian@192.168.7.2:~/
 
 arm-server:
 	$(eval EXECUTABLE := server-arm)
 	$(eval CC := arm-linux-gnueabihf-gcc)
 	$(eval SOURCES := server.c unix_lib.c)
 	@$(MAKE) -f Makefile EXECUTABLE=$(EXECUTABLE) CC=$(CC) SOURCES="$(SOURCES)"
+	sshpass -p "temppwd" scp $(BUILDDIR)/$(EXECUTABLE) debian@192.168.7.2:~/
 win:
 	make -f win_rules.mk
 
