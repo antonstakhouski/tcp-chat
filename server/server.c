@@ -56,7 +56,6 @@ int upload(int newsockfd)
     printf("Filesize: %ld\n", filesize);
     size_t predata = size_pos + sizeof(filesize) - buffer;
     filesize -= fwrite(size_pos + sizeof(filesize), 1, n - predata, out_file);
-    printf("Received %d bytes\n", bytes_received);
 
     // read from socket to file
     while (filesize > 0) {
@@ -73,6 +72,7 @@ int upload(int newsockfd)
                 return -1;
             }
             else{
+                printf("Received %d bytes\n", bytes_received);
                 printf("OOB data: %d\n", *((int *)buffer));
             }
         } else if (!FD_ISSET(newsockfd, &set)) {
@@ -88,7 +88,6 @@ int upload(int newsockfd)
             return -1;
         }
         bytes_received += n;
-        printf("Received %d bytes\n", bytes_received);
         filesize -= fwrite(buffer, 1, n, out_file);
         FD_CLR(newsockfd, &set);
         FD_CLR(newsockfd, &set_error);

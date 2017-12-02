@@ -7,7 +7,7 @@ OBJECTS=$(SOURCES:.c=.o)
 EXECUTABLES=server
 
 all: $(SOURCES) $(EXECUTABLES)
-	bash win_rules.mk
+	# bash win_rules.mk
 
 server: server.o $(LIBRARY).o
 	$(CC) $(LDFLAGS) server.o $(LIBRARY).o -o $@

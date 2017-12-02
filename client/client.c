@@ -82,14 +82,14 @@ void upload(char* filename, int sockfd)
         }
         memset(buffer, 0, MAX_LEN);
 
-        char procents = ((data_sent * 100) / filesize) % 10;
-        if ((res = send(sockfd, (char*)&procents, sizeof(procents), MSG_OOB)) < 0) {
-            printf("Error %s\n", strerror(res));
-            return;
-        } else {
-            printf("OOB data: %d\n", procents);
-            /** sleep(1); */
-        }
+        /** char procents = ((data_sent * 100) / filesize) % 10; */
+        /** if ((res = send(sockfd, (char*)&procents, sizeof(procents), MSG_OOB)) < 0) { */
+        /**     printf("Error %s\n", strerror(res)); */
+        /**     return; */
+        /** } else { */
+        /**     printf("OOB data: %d\n", procents); */
+        /**     [> sleep(1); <] */
+        /** } */
     }
     fclose(file);
 }
