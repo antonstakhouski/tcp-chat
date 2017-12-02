@@ -39,13 +39,14 @@ void echo(int sockfd)
     printf("%s\n", buffer);
 }
 
-void upload(char* filename, int sockfd)
+void upload(char* filename, int sockfd, const struct sockaddr* server)
 {
     FILE* file;
     char buffer[MAX_LEN];
     int bytes_sent = 0;
     int res = 0;
     int data_sent = 0;
+    unsigned int length = sizeof(struct sockaddr_in);
 
     if(!(file = fopen(filename, "rb"))) {
         puts("error opening file");
@@ -62,7 +63,9 @@ void upload(char* filename, int sockfd)
     int char_end = strlen(buffer);
     memcpy(buffer + char_end, &filesize, sizeof(filesize));
     printf("Filesize: %ld\n", filesize);
-    if ((res = send(sockfd, buffer, char_end + sizeof(filesize), 0)) < 0) {
+
+    if ((res = sendto(sockfd, buffer, char_end + sizeof(filesize), 0,
+                    server, length)) < 0) {
         printf("Error %s\n", strerror(res));
         return;
     } else {
@@ -72,24 +75,15 @@ void upload(char* filename, int sockfd)
 
     memset(buffer, 0, MAX_LEN);
     while (( size = fread(buffer, 1, MAX_LEN, file))) {
-        if ((res = send(sockfd, buffer, size, 0)) < 0) {
+        if ((res = sendto(sockfd, buffer, size, 0, server, length)) < 0) {
             printf("Error %s\n", strerror(res));
             return;
         } else {
             bytes_sent += res;
             data_sent += res;
-            printf("%d bytes sent\n", bytes_sent);
+            printf("%ld%%\n", (data_sent * 100) / filesize);
         }
         memset(buffer, 0, MAX_LEN);
-
-        /** char procents = ((data_sent * 100) / filesize) % 10; */
-        /** if ((res = send(sockfd, (char*)&procents, sizeof(procents), MSG_OOB)) < 0) { */
-        /**     printf("Error %s\n", strerror(res)); */
-        /**     return; */
-        /** } else { */
-        /**     printf("OOB data: %d\n", procents); */
-        /**     [> sleep(1); <] */
-        /** } */
     }
     fclose(file);
 }
@@ -108,6 +102,7 @@ int main(int argc, char *argv[])
     init();
     int sockfd, portno;
     struct sockaddr_in serv_addr;
+    /** struct sockaddr_in form; */
     struct hostent *server;
 
     if (argc < 3) {
@@ -117,14 +112,11 @@ int main(int argc, char *argv[])
 
     //create socket
     portno = atoi(argv[2]);
-    sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    server = gethostbyname(argv[1]);
-    if (server == NULL) {
-        fprintf(stderr, "ERROR, no such host\n");
-        exit(0);
-    }
+    sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+    assert(sockfd >= 0);
 
-    set_keepalive(sockfd);
+    server = gethostbyname(argv[1]);
+    assert(server);
 
     //bind socket
     memset((char *) &serv_addr, 0, sizeof(serv_addr));
@@ -133,10 +125,12 @@ int main(int argc, char *argv[])
             (char *)server->h_addr,
          server->h_length);
     serv_addr.sin_port = htons(portno);
-    assert(!connect(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)));
+
+    unsigned int length = sizeof(struct sockaddr_in);
 
     int choize;
     char cmd[256];
+    int n;
     while (1) {
         show_help();
 
@@ -145,21 +139,27 @@ int main(int argc, char *argv[])
         while(!res || choize < 0 || choize > 3)
             res = scanf("%d", &choize);
         get_cmd(choize, cmd);
-        send(sockfd, cmd, strlen(cmd), 0);
+        n = sendto(sockfd, cmd, strlen(cmd), 0,
+                (const struct sockaddr*)&serv_addr, length);
+        if (n < 0) error("sendto");
 
-
-        if (!strcmp(cmd, TIME_STR))
+        if (!strcmp(cmd, TIME_STR)) {
+            continue;
             get_time(sockfd);
-        if (!strcmp(cmd, ECHO_STR))
+        }
+        if (!strcmp(cmd, ECHO_STR)) {
+            continue;
             echo(sockfd);
+        }
         if (!strcmp(cmd, UPLOAD_STR)) {
             char filename[256];
             puts("Enter filename");
             scanf("%s", filename);
-            upload(filename, sockfd);
+            upload(filename, sockfd, (const struct sockaddr*)&serv_addr);
         }
         if (!strcmp(cmd, CLOSE_STR)) {
-            close_sock(sockfd);
+            /** continue; */
+            /** close_sock(sockfd); */
             clear();
             return 0;
         }
