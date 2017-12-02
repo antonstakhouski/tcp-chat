@@ -1,23 +1,27 @@
 CC=gcc
 CFLAGS=-c -Wall -g -O0 -pedantic
 LDFLAGS=
-LIBRARY=unix_lib
-SOURCES=client.c ../$(LIBRARY).c
-OBJECTS=$(SOURCES:.c=.o)
-EXECUTABLES=client
 
-all: clean $(SOURCES) $(EXECUTABLES)
-	make -f beagle_rules.mk
+SOURCEDIR = src
+BUILDDIR = build
+
+SOURCES = $(wildcard $(SOURCEDIR)/*.c)
+OBJECTS = $(patsubst $(SOURCEDIR)/*.c,build/%.o,$(SOURCES))
+
+EXECUTABLE=client
+
+all: dir $(BUILDDIR)/$(EXECUTABLE)
+	# make -f beagle_rules.mk
 	# bash win_rules.mk
 
-client: client.o $(LIBRARY).o
-	$(CC) $(LDFLAGS) client.o $(LIBRARY).o -o $@
+dir:
+	mkdir -p $(BUILDDIR)
 
-.c.o:
+$(BUILDDIR)/$(EXECUTABLE): $(OBJECTS)
+	$(CC) $^ -o $@
+
+$(OBJECTS):
 	$(CC) $(CFLAGS) $< -o $@
 
-$(LIBRARY).o: ../$(LIBRARY).c ../cross_header.h
-	$(CC) $(CFLAGS) ../$(LIBRARY).c -o $(LIBRARY).o
-
 clean:
-	rm -f *.o client client.exe
+	rm -rf build

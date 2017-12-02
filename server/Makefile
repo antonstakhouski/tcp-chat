@@ -1,22 +1,27 @@
 CC=gcc
 CFLAGS=-c -Wall -g -O0 -pedantic
 LDFLAGS=
-LIBRARY=unix_lib
-SOURCES=server.c ../$(LIBRARY).c
-OBJECTS=$(SOURCES:.c=.o)
-EXECUTABLES=server
 
-all: $(SOURCES) $(EXECUTABLES)
+SOURCEDIR = src
+BUILDDIR = build
+
+SOURCES = $(wildcard $(SOURCEDIR)/*.c)
+OBJECTS = $(patsubst $(SOURCEDIR)/*.c,build/%.o,$(SOURCES))
+
+EXECUTABLE=server
+
+all: dir $(BUILDDIR)/$(EXECUTABLE)
+	# make -f beagle_rules.mk
 	# bash win_rules.mk
 
-server: server.o $(LIBRARY).o
-	$(CC) $(LDFLAGS) server.o $(LIBRARY).o -o $@
+dir:
+	mkdir -p $(BUILDDIR)
 
-.c.o:
+$(BUILDDIR)/$(EXECUTABLE): $(OBJECTS)
+	$(CC) $^ -o $@
+
+$(OBJECTS):
 	$(CC) $(CFLAGS) $< -o $@
 
-$(LIBRARY).o: ../$(LIBRARY).c ../cross_header.h
-	$(CC) $(CFLAGS) ../$(LIBRARY).c -o $(LIBRARY).o
-
 clean:
-	rm *.o server server.exe
+	rm -rf build
