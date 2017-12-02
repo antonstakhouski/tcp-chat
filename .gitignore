@@ -1,8 +1,6 @@
-*.~
-*.*~
+*~
 *.o
-tst
-server
-client
-tags
-tst.bin
+*.exe
+client/client
+client/client-beagle
+server/server

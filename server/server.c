@@ -93,6 +93,7 @@ int upload(int newsockfd)
         FD_CLR(newsockfd, &set_error);
     }
     fclose(out_file);
+    puts("File received");
     return 0;
 }
 

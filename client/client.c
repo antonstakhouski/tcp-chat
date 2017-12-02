@@ -62,6 +62,8 @@ void upload(char* filename, int sockfd)
     int char_end = strlen(buffer);
     memcpy(buffer + char_end, &filesize, sizeof(filesize));
     printf("Filesize: %ld\n", filesize);
+
+    time_t start_transfer = time(NULL);
     if ((res = send(sockfd, buffer, char_end + sizeof(filesize), 0)) < 0) {
         printf("Error %s\n", strerror(res));
         return;
@@ -71,6 +73,7 @@ void upload(char* filename, int sockfd)
     }
 
     memset(buffer, 0, MAX_LEN);
+
     while (( size = fread(buffer, 1, MAX_LEN, file))) {
         if ((res = send(sockfd, buffer, size, 0)) < 0) {
             printf("Error %s\n", strerror(res));
@@ -78,7 +81,6 @@ void upload(char* filename, int sockfd)
         } else {
             bytes_sent += res;
             data_sent += res;
-            printf("%d bytes sent\n", bytes_sent);
         }
         memset(buffer, 0, MAX_LEN);
 
@@ -91,6 +93,10 @@ void upload(char* filename, int sockfd)
         /**     [> sleep(1); <] */
         /** } */
     }
+    time_t trans_time = time(NULL) - start_transfer;
+    printf("Transferred in: %lds\n", trans_time);
+    printf("Transfer speed is: %f MiB/s \n",
+            ((float)bytes_sent / trans_time) / (1024 *1024));
     fclose(file);
 }
 
