@@ -1,23 +1,27 @@
 CC=arm-linux-gnueabihf-gcc
 CFLAGS=-c -Wall -g -O0 -pedantic
 LDFLAGS=
-LIBRARY=unix_lib
-SOURCES=client.c ../$(LIBRARY).c
-OBJECTS=$(SOURCES:.c=.o)
-EXECUTABLES=client-beagle
 
-all: clean $(SOURCES) $(EXECUTABLES)
-	sshpass -p "temppwd" scp $(EXECUTABLES) debian@192.168.7.2:~/
-	# bash win_rules.mk
+SOURCEDIR = src
+BUILDDIR = build
 
-client-beagle: client.o $(LIBRARY).o
-	$(CC) $(LDFLAGS) client.o $(LIBRARY).o -o $@
+SOURCES = $(wildcard $(SOURCEDIR)/*.c)
+SOURCES += ../unix_lib.c
+OBJECTS = $(patsubst $(SOURCEDIR)/*.c,build/%.o,$(SOURCES))
 
-.c.o:
+EXECUTABLE=client-arm
+
+all: clean dir $(BUILDDIR)/$(EXECUTABLE)
+	sshpass -p "temppwd" scp $(BUILDDIR)/$(EXECUTABLE) debian@192.168.7.2:~/
+
+dir:
+	mkdir -p $(BUILDDIR)
+
+$(BUILDDIR)/$(EXECUTABLE): $(OBJECTS)
+	$(CC) $^ -o $@
+
+$(OBJECTS):
 	$(CC) $(CFLAGS) $< -o $@
 
-$(LIBRARY).o: ../$(LIBRARY).c ../cross_header.h
-	$(CC) $(CFLAGS) ../$(LIBRARY).c -o $(LIBRARY).o
-
 clean:
-	rm -f *.o client-beagle client.exe
+	rm -f $(BUILDDIR)/*.o $(BUILDDIR)/$(EXECUTABLE)

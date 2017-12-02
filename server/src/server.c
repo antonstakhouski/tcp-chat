@@ -1,7 +1,7 @@
 /* A simple server in the internet domain using TCP
    The port number is passed as an argument */
 
-#include "cross_header.h"
+#include "../../cross_header.h"
 
 void error(const char *msg)
 {
@@ -40,7 +40,7 @@ int upload(int newsockfd)
 
     // if we get no info after command
     if ((n = recv(newsockfd, buffer, MAX_LEN, 0)) < 0) {
-        printf("Error: %s", strerror(n));
+        printf("Error: %s in line %d\n", strerror(n), __LINE__);
         return -1;
     }
     bytes_received += n;
@@ -62,13 +62,13 @@ int upload(int newsockfd)
         FD_SET(newsockfd, &set);
         FD_SET(newsockfd, &set_error);
         if ((res = select( newsockfd + 1, &set, NULL, &set_error, &timeleft)) < 0) {
-            printf("Error: %s", strerror(res));
+            printf("Error: %s in line %d\n", strerror(n), __LINE__);
         }
 
         if (FD_ISSET(newsockfd, &set_error)) {
             memset(buffer, 0, MAX_LEN);
             if ((n = recv(newsockfd, buffer, MAX_LEN, MSG_OOB)) < 0) {
-                printf("Error: %s\n", strerror(n));
+                printf("Error: %s in line %d\n", strerror(n), __LINE__);
                 return -1;
             }
             else{
@@ -84,7 +84,7 @@ int upload(int newsockfd)
 
         memset(buffer, 0, MAX_LEN);
         if ((n = recv(newsockfd, buffer, MAX_LEN, 0)) < 0) {
-            printf("Error: %s", strerror(n));
+            printf("Error: %s in line %d\n", strerror(n), __LINE__);
             return -1;
         }
         bytes_received += n;

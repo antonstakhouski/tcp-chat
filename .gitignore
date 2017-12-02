@@ -1,6 +1,3 @@
 *~
-*.o
-*.exe
-client/client
-client/client-beagle
-server/server
+client/build
+server/build

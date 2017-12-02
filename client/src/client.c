@@ -1,4 +1,4 @@
-#include "cross_header.h"
+#include "../../cross_header.h"
 
 void error(const char *msg)
 {
@@ -51,6 +51,7 @@ void upload(char* filename, int sockfd)
         puts("error opening file");
         return;
     }
+    send(sockfd, UPLOAD_STR, strlen(UPLOAD_STR), 0);
     size_t size = 0;
     memset(buffer, 0, MAX_LEN);
     strcpy(buffer, filename);
@@ -74,6 +75,8 @@ void upload(char* filename, int sockfd)
 
     memset(buffer, 0, MAX_LEN);
 
+    int oob_counter = 0;
+    int oob_interval = 1000;
     while (( size = fread(buffer, 1, MAX_LEN, file))) {
         if ((res = send(sockfd, buffer, size, 0)) < 0) {
             printf("Error %s\n", strerror(res));
@@ -84,19 +87,24 @@ void upload(char* filename, int sockfd)
         }
         memset(buffer, 0, MAX_LEN);
 
-        /** char procents = ((data_sent * 100) / filesize) % 10; */
-        /** if ((res = send(sockfd, (char*)&procents, sizeof(procents), MSG_OOB)) < 0) { */
-        /**     printf("Error %s\n", strerror(res)); */
-        /**     return; */
-        /** } else { */
-        /**     printf("OOB data: %d\n", procents); */
-        /**     [> sleep(1); <] */
-        /** } */
+        char procents = ((data_sent * 100) / filesize) % 10;
+        if (oob_counter > oob_interval) {
+            if ((res = send(sockfd, (char*)&procents, sizeof(procents), MSG_OOB)) < 0) {
+                printf("Error %s\n", strerror(res));
+                return;
+            } else {
+                /** printf("OOB data: %d\n", procents); */
+            }
+            oob_counter = 0;
+        }
+        else {
+            oob_counter++;
+        }
     }
     time_t trans_time = time(NULL) - start_transfer;
     printf("Transferred in: %lds\n", trans_time);
-    printf("Transfer speed is: %f MiB/s \n",
-            ((float)bytes_sent / trans_time) / (1024 *1024));
+    printf("Transfer speed is: %f Mb/s \n",
+            ((float)bytes_sent * 8 / trans_time) / (1000 * 1000));
     fclose(file);
 }
 
@@ -151,13 +159,15 @@ int main(int argc, char *argv[])
         while(!res || choize < 0 || choize > 3)
             res = scanf("%d", &choize);
         get_cmd(choize, cmd);
-        send(sockfd, cmd, strlen(cmd), 0);
 
-
-        if (!strcmp(cmd, TIME_STR))
+        if (!strcmp(cmd, TIME_STR)){
+            send(sockfd, cmd, strlen(cmd), 0);
             get_time(sockfd);
-        if (!strcmp(cmd, ECHO_STR))
+        }
+        if (!strcmp(cmd, ECHO_STR)){
+            send(sockfd, cmd, strlen(cmd), 0);
             echo(sockfd);
+        }
         if (!strcmp(cmd, UPLOAD_STR)) {
             char filename[256];
             puts("Enter filename");
@@ -165,6 +175,7 @@ int main(int argc, char *argv[])
             upload(filename, sockfd);
         }
         if (!strcmp(cmd, CLOSE_STR)) {
+            send(sockfd, cmd, strlen(cmd), 0);
             close_sock(sockfd);
             clear();
             return 0;
