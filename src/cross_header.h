@@ -1,3 +1,6 @@
+#ifndef H_CROSS_HEADER
+#define H_CROSS_HEADER
+
 #define PLATFORM_WIN 1
 #define PLATFORM_UNIX 2
 
@@ -43,3 +46,5 @@ void set_keepalive(int sockfd);
 #define UPLOAD_STR "UPLOAD\n"
 
 #define MIN(a,b) (((a)<(b))?(a):(b))
+
+#endif

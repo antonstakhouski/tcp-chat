@@ -1,7 +1,7 @@
 /* A simple server in the internet domain using TCP
    The port number is passed as an argument */
 
-#include "../cross_header.h"
+#include "cross_header.h"
 
 void error(const char *msg)
 {
@@ -24,7 +24,7 @@ int echo(char* buff, int newsockfd)
     return 0;
 }
 
-int upload(int newsockfd)
+int udp_upload(int newsockfd)
 {
     char buffer[MAX_LEN] = {0};
     int n;
@@ -69,6 +69,77 @@ int upload(int newsockfd)
         filesize -= fwrite(buffer, 1, n, out_file);
     }
     fclose(out_file);
+    puts("File received");
+    return 0;
+}
+
+int upload(int newsockfd)
+{
+    char buffer[MAX_LEN] = {0};
+    int n;
+    char filename[256] = {0};
+    char* size_pos;
+    FILE* out_file;
+    long filesize;
+    size_t filename_len;
+    int bytes_received = 0;
+    unsigned int fromlen = sizeof(struct sockaddr_in);
+    struct sockaddr_in from;
+
+    // if we get no info after command
+    if ((n = recv(newsockfd, buffer, MAX_LEN, 0)) < 0) {
+        printf("Error: %s in line %d\n", strerror(n), __LINE__);
+        return -1;
+    }
+    bytes_received += n;
+    size_pos = strstr(buffer, "\n");
+    filename_len = size_pos - buffer;
+    strncat(filename, buffer, filename_len);
+    printf("Filename: %s\n", filename);
+    printf("Packet length: %d\n", n);
+    out_file = fopen(filename, "wb");
+    size_pos++;
+
+    filesize= *((long*)size_pos);
+    printf("Filesize: %ld\n", filesize);
+    size_t predata = size_pos + sizeof(filesize) - buffer;
+    filesize -= fwrite(size_pos + sizeof(filesize), 1, n - predata, out_file);
+
+    // read from socket to file
+    while (filesize > 0) {
+        FD_SET(newsockfd, &set);
+        FD_SET(newsockfd, &set_error);
+        if ((res = select( newsockfd + 1, &set, NULL, &set_error, &timeleft)) < 0) {
+            printf("Error: %s in line %d\n", strerror(n), __LINE__);
+        }
+
+        if (FD_ISSET(newsockfd, &set_error)) {
+            memset(buffer, 0, MAX_LEN);
+            if ((n = recv(newsockfd, buffer, MAX_LEN, MSG_OOB)) < 0) {
+                printf("Error: %s in line %d\n", strerror(n), __LINE__);
+                return -1;
+            }
+            else{
+                printf("Received %d bytes\n", bytes_received);
+                printf("OOB data: %d\n", *((int *)buffer));
+            }
+        } else if (!FD_ISSET(newsockfd, &set)) {
+            printf("Transfer error\n");
+            close_sock(newsockfd);
+            fclose(out_file);
+            return -1;
+        }
+
+        memset(buffer, 0, MAX_LEN);
+        if ((n = recv(newsockfd, buffer, MAX_LEN, 0)) < 0) {
+            printf("Error: %s in line %d\n", strerror(n), __LINE__);
+            return -1;
+        }
+        bytes_received += n;
+        filesize -= fwrite(buffer, 1, n, out_file);
+    }
+    fclose(out_file);
+    puts("File received");
     return 0;
 }
 

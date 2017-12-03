@@ -1,8 +1,2 @@
-*.~
-*.*~
-*.o
-tst
-server
-client
-tags
-tst.bin
+*~
+build
