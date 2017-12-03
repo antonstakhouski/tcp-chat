@@ -73,16 +73,32 @@ void udp_upload(char* filename, int sockfd, const struct sockaddr* server)
     }
 
     memset(buffer, 0, MAX_LEN);
+    int sn = 0, an;
+    memcpy(buffer, &sn, sizeof(sn));
+    int ack_size;
+    struct sockaddr_in from;
 
-    while (( size = fread(buffer, 1, MAX_LEN, file))) {
-        if ((res = sendto(sockfd, buffer, size, 0, server, length)) < 0) {
+    while (( size = fread(buffer + sizeof(sn), 1, MAX_LEN - sizeof(sn), file))) {
+        if ((res = sendto(sockfd, buffer, size + sizeof(sn), 0, server, length)) < 0) {
             printf("Error %s\n", strerror(res));
             return;
         } else {
+            memset(buffer, 0, MAX_LEN);
+            ack_size = recvfrom(sockfd, buffer, MAX_LEN, 0,
+                    (struct sockaddr *)&from, &length);
+            if (ack_size < 0) error("recvfrom");
+            an = *((int*)buffer);
+            if (an != sn) {
+                puts("Transfer error");
+            }
+            else {
+                sn++;
+            }
             bytes_sent += res;
             data_sent += res;
         }
         memset(buffer, 0, MAX_LEN);
+        memcpy(buffer, &sn, sizeof(sn));
     }
     time_t trans_time = time(NULL) - start_transfer;
     print_trans_results(bytes_sent, trans_time);

@@ -48,6 +48,9 @@ int udp_upload(int newsockfd)
     size_t predata = size_pos + sizeof(filesize) - buffer;
     filesize -= fwrite(size_pos + sizeof(filesize), 1, n - predata, out_file);
 
+    int sn = 0;
+    int an = 0;
+    int ack_size;
     // read from socket to file
     while (filesize > 0) {
         memset(buffer, 0, MAX_LEN);
@@ -56,8 +59,17 @@ int udp_upload(int newsockfd)
             printf("Error: %s", strerror(n));
             return -1;
         }
+        sn = *((int*)buffer);
+        if (sn == an) {
+            ack_size  = sendto(newsockfd, &sn, sizeof(sn), 0,
+                    (struct sockaddr *)&from, fromlen);
+            if (ack_size < 0) error("recvfrom");
+            filesize -= fwrite(buffer + sizeof(sn), 1, n - sizeof(sn), out_file);
+            an++;
+        } else {
+            puts("Transfer error");
+        }
         bytes_received += n;
-        filesize -= fwrite(buffer, 1, n, out_file);
     }
     fclose(out_file);
     puts("File received");
