@@ -5,7 +5,7 @@ LDFLAGS=
 SOURCEDIR = src
 BUILDDIR = build
 
-SOURCES ?= client.c unix_lib.c
+SOURCES =
 OBJECTS = $(patsubst %.c,$(BUILDDIR)/%.o,$(SOURCES))
 
 EXECUTABLE ?= client
@@ -20,40 +20,40 @@ dir:
 lin-client:
 	$(eval EXECUTABLE := client)
 	$(eval CC := gcc)
-	$(eval SOURCES := client.c unix_lib.c)
+	$(eval SOURCES := client.c unix_lib.c lib.c)
 	@$(MAKE) -f Makefile all EXECUTABLE=$(EXECUTABLE) CC=$(CC) SOURCES="$(SOURCES)"
 
 lin-server:
 	$(eval EXECUTABLE := server)
 	$(eval CC := gcc)
-	$(eval SOURCES := server.c unix_lib.c)
+	$(eval SOURCES := server.c unix_lib.c lib.c)
 	@$(MAKE) -f Makefile all EXECUTABLE=$(EXECUTABLE) CC=$(CC) SOURCES="$(SOURCES)"
 
 win-client:
 	$(eval EXECUTABLE := client.exe)
 	$(eval CC := i686-w64-mingw32-gcc)
-	$(eval SOURCES := client.c win_lib.c)
+	$(eval SOURCES := client.c win_lib.c lib.c)
 	$(eval LDFLAGS := --static -lws2_32)
 	@$(MAKE) -f Makefile all EXECUTABLE=$(EXECUTABLE) CC=$(CC) SOURCES="$(SOURCES)" LDFLAGS="$(LDFLAGS)"
 
 win-server:
 	$(eval EXECUTABLE := server.exe)
 	$(eval CC := i686-w64-mingw32-gcc)
-	$(eval SOURCES := server.c win_lib.c)
+	$(eval SOURCES := server.c win_lib.c lib.c)
 	$(eval LDFLAGS := --static -lws2_32)
 	@$(MAKE) -f Makefile all EXECUTABLE=$(EXECUTABLE) CC=$(CC) SOURCES="$(SOURCES)" LDFLAGS="$(LDFLAGS)"
 
 arm-client:
 	$(eval EXECUTABLE := client-arm)
 	$(eval CC := arm-linux-gnueabihf-gcc)
-	$(eval SOURCES := client.c unix_lib.c)
+	$(eval SOURCES := client.c unix_lib.c lib.c)
 	@$(MAKE) -f Makefile EXECUTABLE=$(EXECUTABLE) CC=$(CC) SOURCES="$(SOURCES)"
 	sshpass -p "temppwd" scp $(BUILDDIR)/$(EXECUTABLE) debian@192.168.7.2:~/
 
 arm-server:
 	$(eval EXECUTABLE := server-arm)
 	$(eval CC := arm-linux-gnueabihf-gcc)
-	$(eval SOURCES := server.c unix_lib.c)
+	$(eval SOURCES := server.c unix_lib.c lib.c)
 	@$(MAKE) -f Makefile EXECUTABLE=$(EXECUTABLE) CC=$(CC) SOURCES="$(SOURCES)"
 	sshpass -p "temppwd" scp $(BUILDDIR)/$(EXECUTABLE) debian@192.168.7.2:~/
 win:

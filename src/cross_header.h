@@ -34,10 +34,14 @@ typedef socklen_t socketlen;
 
 #endif
 
+enum mode {TCP, UDP};
+
 int close_sock(int sockfd);
 void init();
 void clear();
 void set_keepalive(int sockfd);
+void init_socket(int argc, char* argv[],
+        int* sockfd, struct sockaddr_in* serv_addr, enum mode* current_mode);
 
 #define MAX_LEN 1432
 #define CLOSE_STR "CLOSE\n"

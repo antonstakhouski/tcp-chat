@@ -82,9 +82,7 @@ int upload(int newsockfd)
     FILE* out_file;
     long filesize;
     size_t filename_len;
-    int bytes_received = 0;
-    unsigned int fromlen = sizeof(struct sockaddr_in);
-    struct sockaddr_in from;
+    long bytes_received = 0;
 
     // if we get no info after command
     if ((n = recv(newsockfd, buffer, MAX_LEN, 0)) < 0) {
@@ -105,6 +103,9 @@ int upload(int newsockfd)
     size_t predata = size_pos + sizeof(filesize) - buffer;
     filesize -= fwrite(size_pos + sizeof(filesize), 1, n - predata, out_file);
 
+    fd_set set, set_error;
+    int res;
+    struct timeval timeleft = {30, 0};
     // read from socket to file
     while (filesize > 0) {
         FD_SET(newsockfd, &set);
@@ -120,7 +121,6 @@ int upload(int newsockfd)
                 return -1;
             }
             else{
-                printf("Received %d bytes\n", bytes_received);
                 printf("OOB data: %d\n", *((int *)buffer));
             }
         } else if (!FD_ISSET(newsockfd, &set)) {
@@ -139,6 +139,7 @@ int upload(int newsockfd)
         filesize -= fwrite(buffer, 1, n, out_file);
     }
     fclose(out_file);
+    printf("%ld bytes received\n", bytes_received);
     puts("File received");
     return 0;
 }
@@ -155,30 +156,17 @@ int send_time(int newsockfd)
     return 0;
 }
 
-int main(int argc, char *argv[])
+int udp_main(int argc, char *argv[])
 {
-    init();
-    int sockfd, portno;
+    enum mode current_mode;
+    struct sockaddr_in serv_addr;
+    int sockfd;
+    init_socket(argc, argv, &sockfd, &serv_addr, &current_mode);
+
     char buffer[MAX_LEN];
-    struct sockaddr_in serv_addr, from;
-    int n;
-    if (argc < 2) {
-        fprintf(stderr,"ERROR, no port provided\n");
-        exit(1);
-    }
-
-    //create socket
-    sockfd = socket(AF_INET, SOCK_DGRAM, 0);
-    assert(sockfd >= 0);
-
-    memset((char *) &serv_addr, 0, sizeof(serv_addr));
-    portno = atoi(argv[1]);
-
-    //bind socket
-    serv_addr.sin_family = AF_INET;
-    serv_addr.sin_addr.s_addr = INADDR_ANY;
-    serv_addr.sin_port = htons(portno);
+    struct sockaddr_in from;
     assert(!bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)));
+    int n;
 
     socklen_t fromlen;
     fromlen = sizeof(struct sockaddr_in);
@@ -200,7 +188,7 @@ int main(int argc, char *argv[])
             }
             if (!strncmp(buffer, UPLOAD_STR, strlen(UPLOAD_STR))) {
                 if(upload(sockfd) < 0)
-                    break;;
+                    break;
             }
             if (!strncmp(buffer, TIME_STR, strlen(TIME_STR))) {
                 continue;
@@ -211,6 +199,58 @@ int main(int argc, char *argv[])
             printf("Error recvfrom\n");
         }
     }
+    close_sock(sockfd);
+    clear();
+    return 0;
+}
+
+int main(int argc, char *argv[])
+{
+    enum mode current_mode;
+    struct sockaddr_in serv_addr;
+    int sockfd;
+    init_socket(argc, argv, &sockfd, &serv_addr, &current_mode);
+
+    char buffer[MAX_LEN];
+    assert(!bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)));
+
+    struct sockaddr_in cli_addr;
+    socketlen clilen;
+    //listen
+    listen(sockfd, 5);
+    clilen = sizeof(cli_addr);
+    int newsockfd, n;
+
+    puts("Server is ready");
+    while (1) {
+        newsockfd = accept(sockfd,
+                (struct sockaddr *) &cli_addr,
+                &clilen);
+
+        while (1) {
+            memset(buffer, 0, MAX_LEN);
+            if ((n = recv(newsockfd, buffer, MAX_LEN, 0)) > 0) {
+                if (n < 0)
+                    break;
+                if (!strncmp(buffer, CLOSE_STR, strlen(CLOSE_STR))) {
+                    if (close_sock(newsockfd) < 0)
+                        break;
+                    break;
+                }
+                if (!strncmp(buffer, ECHO_STR, strlen(ECHO_STR)))
+                    if (echo(strstr(buffer, "\n") + 1, newsockfd) < 0)
+                        break;
+                if (!strncmp(buffer, UPLOAD_STR, strlen(UPLOAD_STR))) {
+                    if(upload(newsockfd) < 0)
+                        break;;
+                }
+                if (!strncmp(buffer, TIME_STR, strlen(TIME_STR)))
+                    if (send_time(newsockfd) < 0 )
+                        break;
+            }
+        }
+    }
+    close_sock(newsockfd);
     close_sock(sockfd);
     clear();
     return 0;
