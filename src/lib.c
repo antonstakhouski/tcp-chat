@@ -7,8 +7,10 @@ void init_socket(int argc, char* argv[],
 
     if (!strcmp(argv[1], "-t")) {
         *current_mode = TCP;
+        puts("TCP mode");
     } else if (!strcmp(argv[1], "-u")) {
         *current_mode = UDP;
+        puts("UDP mode");
     } else {
         puts("You must specify transport layer protocol\n");
         exit(0);

@@ -47,7 +47,7 @@ void udp_upload(char* filename, int sockfd, const struct sockaddr* server)
         return;
     }
     res = sendto(sockfd, UPLOAD_STR, strlen(UPLOAD_STR), 0,
-            (const struct sockaddr*)&server, length);
+            server, length);
     if (res < 0) error("sendto");
 
     size_t size = 0;
@@ -81,14 +81,11 @@ void udp_upload(char* filename, int sockfd, const struct sockaddr* server)
         } else {
             bytes_sent += res;
             data_sent += res;
-            printf("%ld%%\n", (data_sent * 100) / filesize);
         }
         memset(buffer, 0, MAX_LEN);
     }
     time_t trans_time = time(NULL) - start_transfer;
-    printf("Transferred in: %lds\n", trans_time);
-    printf("Transfer speed is: %f Mb/s \n",
-            ((float)bytes_sent * 8 / trans_time) / (1000 * 1000));
+    print_trans_results(bytes_sent, trans_time);
     fclose(file);
 }
 
@@ -155,10 +152,15 @@ void tcp_upload(char* filename, int sockfd)
         }
     }
     time_t trans_time = time(NULL) - start_transfer;
+    print_trans_results(bytes_sent, trans_time);
+    fclose(file);
+}
+
+void print_trans_results(long bytes_sent, time_t trans_time)
+{
     printf("%ld bytes transferred in: %lds\n", bytes_sent, trans_time);
     printf("Transfer speed is: %f Mb/s \n",
             ((float)bytes_sent * 8 / trans_time) / (1000 * 1000));
-    fclose(file);
 }
 
 void show_tcp_help()
@@ -208,7 +210,6 @@ void tcp_loop(int sockfd)
 
 void udp_loop(int sockfd, struct sockaddr_in serv_addr)
 {
-
     while (1) {
             char filename[256];
             puts("Enter filename");

@@ -16,7 +16,7 @@
 #include <winsock2.h>
 #include <mstcpip.h>
 #define PLATFORM PLATFORM_WIN
-typedef int socketlen;
+typedef unsigned int socketlen;
 
 #else
 
@@ -32,7 +32,7 @@ typedef int socketlen;
 
 typedef socklen_t socketlen;
 
-#endif
+#endif //  defined(_WIN32) || defined(_WIN64)
 
 enum mode {TCP, UDP};
 
