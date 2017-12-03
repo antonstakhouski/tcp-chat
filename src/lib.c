@@ -44,3 +44,9 @@ void init_socket(int argc, char* argv[],
     if (*current_mode == TCP)
         set_keepalive(*sockfd);
 }
+
+void error(const char *msg)
+{
+    perror(msg);
+    exit(1);
+}

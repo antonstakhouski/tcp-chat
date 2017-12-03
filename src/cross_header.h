@@ -40,6 +40,7 @@ int close_sock(int sockfd);
 void init();
 void clear();
 void set_keepalive(int sockfd);
+void error(const char *msg);
 void init_socket(int argc, char* argv[],
         int* sockfd, struct sockaddr_in* serv_addr, enum mode* current_mode);
 
@@ -51,4 +52,4 @@ void init_socket(int argc, char* argv[],
 
 #define MIN(a,b) (((a)<(b))?(a):(b))
 
-#endif
+#endif //H_CROSS_HEADER
