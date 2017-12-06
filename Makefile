@@ -1,5 +1,5 @@
 CC ?= gcc
-CFLAGS=-c -Wall -g -O0 -pedantic
+CFLAGS=-c -Wall -g -O0 -pedantic -std=c11
 LDFLAGS=
 
 SOURCEDIR = src
@@ -12,6 +12,23 @@ SERVER_SOURCES= server.c server_lib.c
 OBJECTS = $(patsubst %.c,$(BUILDDIR)/%.o,$(SOURCES))
 
 EXECUTABLE ?= client
+
+BBB_ADDR="debian@192.168.7.2:~/"
+RPI_ADDR="pi@192.168.12.213:~/"
+
+BBB_PASS="temppwd"
+RPI_PASS="raspberry"
+
+BBB_CC = arm-linux-gnueabihf-gcc
+RPI_CC = /bin/arm-bcm2708-linux-gnueabi/gcc
+
+ARM_CC = $(BBB_CC)
+R_ADDR=$(RPI_ADDR)
+R_PASS=$(RPI_PASS)
+
+# ARM_CC = $(BBB_CC)
+# R_ADDR=$(BBB_ADDR)
+# R_PASS=$(BBB_PASS)
 
 .PHONY: clean lin-client arm-client
 
@@ -52,19 +69,18 @@ win-server:
 
 arm-client:
 	$(eval EXECUTABLE := client-arm)
-	$(eval CC := arm-linux-gnueabihf-gcc)
 	$(eval SOURCES += $(CLIENT_SOURCES))
 	$(eval SOURCES += unix_lib.c)
-	@$(MAKE) -f Makefile EXECUTABLE=$(EXECUTABLE) CC=$(CC) SOURCES="$(SOURCES)"
-	sshpass -p "temppwd" scp $(BUILDDIR)/$(EXECUTABLE) debian@192.168.7.2:~/
+	@$(MAKE) -f Makefile EXECUTABLE=$(EXECUTABLE) CC=$(ARM_CC) SOURCES="$(SOURCES)"
+	sshpass -p $(R_PASS) scp $(BUILDDIR)/$(EXECUTABLE) $(R_ADDR)
 
 arm-server:
 	$(eval EXECUTABLE := server-arm)
 	$(eval CC := arm-linux-gnueabihf-gcc)
 	$(eval SOURCES += $(SERVER_SOURCES))
 	$(eval SOURCES += unix_lib.c)
-	@$(MAKE) -f Makefile EXECUTABLE=$(EXECUTABLE) CC=$(CC) SOURCES="$(SOURCES)"
-	sshpass -p "temppwd" scp $(BUILDDIR)/$(EXECUTABLE) debian@192.168.7.2:~/
+	@$(MAKE) -f Makefile EXECUTABLE=$(EXECUTABLE) CC=$(ARM_CC) SOURCES="$(SOURCES)"
+	sshpass -p $(R_PASS) scp $(BUILDDIR)/$(EXECUTABLE) $(R_ADDR)
 win:
 	make -f win_rules.mk
 

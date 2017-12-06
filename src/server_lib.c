@@ -83,7 +83,7 @@ int tcp_upload(int newsockfd)
     char filename[256] = {0};
     char* size_pos;
     FILE* out_file;
-    long filesize;
+    int64_t filesize;
     size_t filename_len;
     long bytes_received = 0;
 
@@ -95,14 +95,16 @@ int tcp_upload(int newsockfd)
     bytes_received += n;
     size_pos = strstr(buffer, "\n");
     filename_len = size_pos - buffer;
+    printf("Filename len: %zu\n", filename_len);
     strncat(filename, buffer, filename_len);
     printf("Filename: %s\n", filename);
     printf("Packet length: %d\n", n);
     out_file = fopen(filename, "wb");
     size_pos++;
+    printf("Filesize takes %zu bytes\n", sizeof(filesize));
 
-    filesize= *((long*)size_pos);
-    printf("Filesize: %ld\n", filesize);
+    filesize = *((long*)size_pos);
+    printf("Filesize: %" PRId64 "\n", filesize);
     size_t predata = size_pos + sizeof(filesize) - buffer;
     filesize -= fwrite(size_pos + sizeof(filesize), 1, n - predata, out_file);
 

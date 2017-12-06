@@ -10,6 +10,7 @@
 #include <time.h>
 #include <errno.h>
 #include <assert.h>
+#include <inttypes.h>
 
 #if defined(_WIN32) || defined(_WIN64)
 
@@ -30,6 +31,7 @@ typedef unsigned int socketlen;
 #include <sys/select.h>
 #define PLATFORM PLATFORM_UNIX
 
+#define h_addr h_addr_list[0] /* for backward compatibility */
 typedef socklen_t socketlen;
 
 #endif //  defined(_WIN32) || defined(_WIN64)

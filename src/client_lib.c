@@ -117,18 +117,22 @@ void tcp_upload(char* filename, int sockfd)
         puts("error opening file");
         return;
     }
-    send(sockfd, UPLOAD_STR, strlen(UPLOAD_STR), 0);
+    memset(buffer, 0, MAX_LEN);
+    strcpy(buffer, UPLOAD_STR);
+    send(sockfd, UPLOAD_STR, MAX_LEN, 0);
+
     size_t size = 0;
     memset(buffer, 0, MAX_LEN);
     strcpy(buffer, filename);
     strcat(buffer, "\n");
 
     fseek(file, 0L, SEEK_END);
-    long filesize = ftell(file);
+    int64_t filesize = ftell(file);
     rewind(file);
     int char_end = strlen(buffer);
     memcpy(buffer + char_end, &filesize, sizeof(filesize));
-    printf("Filesize: %ld\n", filesize);
+    printf("Filesize: %" PRId64 "\n", filesize);
+    printf("Filesize takes %zu bytes\n", sizeof(filesize));
 
     time_t start_transfer = time(NULL);
     if ((res = send(sockfd, buffer, char_end + sizeof(filesize), 0)) < 0) {
