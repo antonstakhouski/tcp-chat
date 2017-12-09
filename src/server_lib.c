@@ -17,7 +17,8 @@ int echo(char* buff, int newsockfd)
 
 int udp_upload(int newsockfd)
 {
-    char buffer[MAX_LEN] = {0};
+    char rx_buffer[MAX_LEN] = {0};
+    char tx_buffer[MAX_LEN] = {0};
     int n;
     char filename[256] = {0};
     char* size_pos;
@@ -29,50 +30,71 @@ int udp_upload(int newsockfd)
     struct sockaddr_in from;
 
     // if we get no info after command
-    if ((n = recvfrom(newsockfd, buffer, MAX_LEN, 0,
+    if ((n = recvfrom(newsockfd, rx_buffer, MAX_LEN, 0,
                     (struct sockaddr*)&from, &fromlen)) < 0) {
         printf("Error: %s", strerror(n));
         return -1;
     }
     bytes_received += n;
-    size_pos = strstr(buffer, "\n");
-    filename_len = size_pos - buffer;
-    strncat(filename, buffer, filename_len);
+    size_pos = strstr(rx_buffer, "\n");
+    filename_len = size_pos - rx_buffer;
+    strncat(filename, rx_buffer, filename_len);
     printf("Filename: %s\n", filename);
-    printf("Packet length: %d\n", n);
     out_file = fopen(filename, "wb");
     size_pos++;
 
     filesize= *((long*)size_pos);
     printf("Filesize: %ld\n", filesize);
-    size_t predata = size_pos + sizeof(filesize) - buffer;
+    printf("%d bytes received\n", n);
+    size_t predata = size_pos + sizeof(filesize) - rx_buffer;
     filesize -= fwrite(size_pos + sizeof(filesize), 1, n - predata, out_file);
 
-    int sn = 0;
+    int sn = -1;
     int an = 0;
     int ack_size;
+    int bytes_to_write;
     // read from socket to file
     while (filesize > 0) {
-        memset(buffer, 0, MAX_LEN);
-        if ((n = recvfrom(newsockfd, buffer, MAX_LEN, 0,
-                        (struct sockaddr*)&from, &fromlen)) < 0) {
+        memset(rx_buffer, 0, MAX_LEN);
+        if ((n = recvfrom(newsockfd, rx_buffer, MAX_LEN, 0, (struct sockaddr*)&from, &fromlen)) < 0) {
             printf("Error: %s", strerror(n));
             return -1;
         }
-        sn = *((int*)buffer);
-        if (sn == an) {
-            ack_size  = sendto(newsockfd, &sn, sizeof(sn), 0,
-                    (struct sockaddr *)&from, fromlen);
-            if (ack_size < 0) error("recvfrom");
-            filesize -= fwrite(buffer + sizeof(sn), 1, n - sizeof(sn), out_file);
-            an++;
-        } else {
-            puts("Transfer error");
+        while(an != sn) {
+            sn = *((int*)rx_buffer);
+            printf("SN: %d ", sn);
+            printf("AN: %d\n", an);
+            bytes_received += n;
+            if (sn == an) {
+                an++;
+                bytes_to_write = MIN(n - sizeof(sn), filesize);
+                filesize -= fwrite(rx_buffer + sizeof(sn), 1, bytes_to_write, out_file);
+                if (filesize <= 0) {
+                    // need to close connection properly
+                    fflush(stdout);
+                    break;
+                }
+                memcpy(tx_buffer, &an, sizeof(an));
+                ack_size  = sendto(newsockfd, tx_buffer, MAX_LEN, 0, (struct sockaddr *)&from, fromlen);
+                if (ack_size < 0) error("recvfrom");
+                sn = -1;
+                break;
+            } else {
+                printf("Packet %d was lost\n", an);
+                ack_size  = sendto(newsockfd, tx_buffer, MAX_LEN, 0, (struct sockaddr *)&from, fromlen);
+                if (ack_size < 0) error("recvfrom");
+
+                memset(rx_buffer, 0, MAX_LEN);
+                if ((n = recvfrom(newsockfd, rx_buffer, MAX_LEN, 0, (struct sockaddr*)&from, &fromlen)) < 0) {
+                    printf("Error: %s", strerror(n));
+                    return -1;
+                }
+            }
         }
-        bytes_received += n;
     }
     fclose(out_file);
     puts("File received");
+    fflush(stdout);
     return 0;
 }
 

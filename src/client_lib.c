@@ -36,10 +36,11 @@ void echo(int sockfd)
 void udp_upload(char* filename, int sockfd, const struct sockaddr* server)
 {
     FILE* file;
-    char buffer[MAX_LEN];
+    char tx_buffer[MAX_LEN] = {0};
+    char rx_buffer[MAX_LEN] = {0};
     unsigned int bytes_sent = 0;
+    unsigned int bytes_lost = 0;
     int res = 0;
-    unsigned int data_sent = 0;
     unsigned int length = sizeof(struct sockaddr_in);
 
     if(!(file = fopen(filename, "rb"))) {
@@ -51,64 +52,75 @@ void udp_upload(char* filename, int sockfd, const struct sockaddr* server)
     if (res < 0) error("sendto");
 
     size_t size = 0;
-    memset(buffer, 0, MAX_LEN);
-    strcpy(buffer, filename);
-    strcat(buffer, "\n");
+    strcpy(tx_buffer, filename);
+    strcat(tx_buffer, "\n");
 
     fseek(file, 0L, SEEK_END);
     long filesize = ftell(file);
     rewind(file);
-    int char_end = strlen(buffer);
-    memcpy(buffer + char_end, &filesize, sizeof(filesize));
+    int char_end = strlen(tx_buffer);
+    memcpy(tx_buffer + char_end, &filesize, sizeof(filesize));
     printf("Filesize: %ld\n", filesize);
 
     time_t start_transfer = time(NULL);
-    if ((res = sendto(sockfd, buffer, char_end + sizeof(filesize), 0,
+    if ((res = sendto(sockfd, tx_buffer, char_end + sizeof(filesize), 0,
                     server, length)) < 0) {
         printf("Error %s\n", strerror(res));
         return;
     } else {
         bytes_sent += res;
-        /*printf("%d bytes sent\n", bytes_sent);*/
+        printf("%d bytes sent\n", bytes_sent);
     }
 
-    memset(buffer, 0, MAX_LEN);
-    int sn = 0, an;
-    memcpy(buffer, &sn, sizeof(sn));
+    memset(tx_buffer, 0, MAX_LEN);
+    int sn = 0, an = -1;
+    memcpy(tx_buffer, &sn, sizeof(sn));
     int ack_size;
     struct sockaddr_in from;
 
-    while (( size = fread(buffer + sizeof(sn), 1, MAX_LEN - sizeof(sn), file))) {
-        if ((res = sendto(sockfd, buffer, size + sizeof(sn), 0, server, length)) < 0) {
+    while (( size = fread(tx_buffer + sizeof(sn), 1, MAX_LEN - sizeof(sn), file))) {
+        if ((res = sendto(sockfd, tx_buffer, MAX_LEN, 0, server, length)) < 0) {
             printf("Error %s\n", strerror(res));
             return;
         } else {
-            memset(buffer, 0, MAX_LEN);
-            ack_size = recvfrom(sockfd, buffer, MAX_LEN, 0,
-                    (struct sockaddr *)&from, &length);
-            if (ack_size < 0) error("recvfrom");
-            an = *((int*)buffer);
-            if (an != sn) {
-                puts("Transfer error");
+            while (an <= sn) {
+                memset(rx_buffer, 0, MAX_LEN);
+
+                // receive ACK
+                ack_size = recvfrom(sockfd, rx_buffer, MAX_LEN, 0, (struct sockaddr *)&from, &length);
+                if (ack_size < 0) error("recvfrom");
+                an = *((int*)rx_buffer);
+                printf("SN: %d ", sn);
+                printf("AN: %d\n", an);
+
+                // ACK was lost. retransmit package
+                bytes_sent += res;
+                if (an <= sn) {
+                    bytes_lost += res;
+                    printf("Packet %d lost\n", sn);
+                    if ((res = sendto(sockfd, tx_buffer, MAX_LEN, 0, server, length)) < 0) {
+                        printf("Error %s\n", strerror(res));
+                        return;
+                    }
+                } else {
+                    break;
+                }
             }
-            else {
-                sn++;
-            }
-            bytes_sent += res;
-            data_sent += res;
+            sn++;
+            an = -1;
+            memset(tx_buffer, 0, MAX_LEN);
+            memcpy(tx_buffer, &sn, sizeof(sn));
         }
-        memset(buffer, 0, MAX_LEN);
-        memcpy(buffer, &sn, sizeof(sn));
     }
     time_t trans_time = time(NULL) - start_transfer;
     print_trans_results(bytes_sent, trans_time);
     fclose(file);
 }
 
-void tcp_upload(char* filename, int sockfd, enum oob_mode curr_oob_mode)
+void tcp_upload(char* filename, int sockfd)
 {
     FILE* file;
-    char buffer[MAX_LEN];
+    char buffer[MAX_LEN] = {0};
     unsigned int bytes_sent = 0;
     int res = 0;
     unsigned int data_sent = 0;
@@ -117,8 +129,6 @@ void tcp_upload(char* filename, int sockfd, enum oob_mode curr_oob_mode)
         puts("error opening file");
         return;
     }
-    memset(buffer, 0, MAX_LEN);
-    strcpy(buffer, UPLOAD_STR);
     send(sockfd, UPLOAD_STR, MAX_LEN, 0);
 
     size_t size = 0;
@@ -157,31 +167,24 @@ void tcp_upload(char* filename, int sockfd, enum oob_mode curr_oob_mode)
             data_sent += res;
         }
         memset(buffer, 0, MAX_LEN);
-        if (curr_oob_mode == OOB_ON)
-            send_OOB_data(sockfd, oob_counter, oob_interval, data_sent, filesize);
-    }
-    time_t trans_time = time(NULL) - start_transfer;
-    print_trans_results(bytes_sent, trans_time);
-    fclose(file);
-}
 
-void send_OOB_data(int sockfd, int oob_counter, int oob_interval, int data_sent, int filesize)
-{
-    int res;
         char procents = ((data_sent * 100) / filesize) % 10;
         if (oob_counter > oob_interval) {
             if ((res = send(sockfd, (char*)&procents, sizeof(procents), MSG_OOB)) < 0) {
                 printf("Error %s\n", strerror(res));
                 return;
             } else {
-                /*printf("OOB data: %d\n", procents); */
+                printf("OOB data: %d\n", procents);
             }
             oob_counter = 0;
         }
         else {
             oob_counter++;
         }
-
+    }
+    time_t trans_time = time(NULL) - start_transfer;
+    print_trans_results(bytes_sent, trans_time);
+    fclose(file);
 }
 
 void print_trans_results(long bytes_sent, time_t trans_time)
@@ -225,7 +228,7 @@ void tcp_loop(int sockfd)
             char filename[256];
             puts("Enter filename");
             scanf("%s", filename);
-            tcp_upload(filename, sockfd, OOB_OFF);
+            tcp_upload(filename, sockfd);
         }
         if (!strcmp(cmd, CLOSE_STR)) {
             send(sockfd, cmd, strlen(cmd), 0);

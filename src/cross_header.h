@@ -12,6 +12,8 @@
 #include <assert.h>
 #include <inttypes.h>
 
+// this maybe unix only
+#include <sys/param.h>
 #if defined(_WIN32) || defined(_WIN64)
 
 #include <winsock2.h>
