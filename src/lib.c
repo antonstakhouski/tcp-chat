@@ -52,3 +52,10 @@ void error(const char *msg)
     perror(msg);
     exit(1);
 }
+
+void print_trans_results(long bytes_sent, time_t trans_time)
+{
+    printf("%ld bytes transferred in: %lds\n", bytes_sent, trans_time);
+    printf("Transfer speed is: %f Mb/s \n",
+            ((float)bytes_sent * 8 / trans_time) / (1000 * 1000));
+}

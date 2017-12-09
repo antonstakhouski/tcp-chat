@@ -29,13 +29,13 @@ int udp_upload(int newsockfd)
     unsigned int fromlen = sizeof(struct sockaddr_in);
     struct sockaddr_in from;
 
+
     // if we get no info after command
     if ((n = recvfrom(newsockfd, rx_buffer, MAX_LEN, 0,
                     (struct sockaddr*)&from, &fromlen)) < 0) {
         printf("Error: %s", strerror(n));
         return -1;
     }
-    bytes_received += n;
     size_pos = strstr(rx_buffer, "\n");
     filename_len = size_pos - rx_buffer;
     strncat(filename, rx_buffer, filename_len);
@@ -56,6 +56,9 @@ int udp_upload(int newsockfd)
     unsigned char tx_flags = 0;
     unsigned char rx_flags = 0;
     int header_len = sizeof(sn) + sizeof(tx_flags);
+
+    time_t start_transfer = time(NULL);
+    time_t trans_time;
     // read from socket to file
     while (1) {
         memset(rx_buffer, 0, MAX_LEN);
@@ -68,7 +71,6 @@ int udp_upload(int newsockfd)
             rx_flags = *((unsigned char*)(rx_buffer + sizeof(sn)));
             printf("SN: %d ", sn);
             printf("AN: %d\n", an);
-            bytes_received += n;
             if (sn == an) {
                 an++;
                 if (tx_flags) {
@@ -89,6 +91,7 @@ int udp_upload(int newsockfd)
                 if (filesize > 0) {
                     bytes_to_write = MIN(n - header_len, filesize);
                     filesize -= fwrite(rx_buffer + header_len, 1, bytes_to_write, out_file);
+                    bytes_received += bytes_to_write;
                 }
                 else
                     puts("File got");
@@ -115,6 +118,8 @@ int udp_upload(int newsockfd)
 END_SERVER_UDP_TRANSFER:
     fclose(out_file);
     puts("File received");
+    trans_time = time(NULL) - start_transfer;
+    print_trans_results(bytes_received, trans_time);
     fflush(stdout);
     return 0;
 }

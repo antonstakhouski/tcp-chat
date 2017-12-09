@@ -47,6 +47,7 @@ void set_keepalive(int sockfd);
 void error(const char *msg);
 void init_socket(int argc, char* argv[],
         int* sockfd, struct sockaddr_in* serv_addr, enum mode* current_mode);
+void print_trans_results(long bytes_sent, time_t trans_time);
 
 #define MAX_LEN 1432
 #define CLOSE_STR "CLOSE\n"

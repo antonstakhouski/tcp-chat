@@ -61,15 +61,12 @@ void udp_upload(char* filename, int sockfd, const struct sockaddr* server)
     memcpy(tx_buffer + char_end, &filesize, sizeof(filesize));
     printf("Filesize: %ld\n", filesize);
 
-    time_t start_transfer = time(NULL);
-    time_t trans_time;
     if ((res = sendto(sockfd, tx_buffer, char_end + sizeof(filesize), 0,
                     server, length)) < 0) {
         printf("Error %s\n", strerror(res));
         return;
     } else {
-        bytes_sent += res;
-        printf("%d bytes sent\n", bytes_sent);
+        printf("%d bytes sent\n", res);
     }
 
     memset(tx_buffer, 0, MAX_LEN);
@@ -82,6 +79,8 @@ void udp_upload(char* filename, int sockfd, const struct sockaddr* server)
     struct sockaddr_in from;
     int header_len = sizeof(sn) + sizeof(tx_flags);
 
+    time_t start_transfer = time(NULL);
+    time_t trans_time;
     size_t size = 1;
     while (1) {
         size = fread(tx_buffer + header_len, 1, MAX_LEN - header_len, file);
@@ -105,7 +104,6 @@ void udp_upload(char* filename, int sockfd, const struct sockaddr* server)
                 printf("AN: %d\n", an);
 
                 // ACK was lost. retransmit package
-                bytes_sent += res;
                 if (an <= sn) {
                     bytes_lost += res;
                     printf("Packet %d lost\n", sn);
@@ -114,6 +112,7 @@ void udp_upload(char* filename, int sockfd, const struct sockaddr* server)
                         return;
                     }
                 } else {
+                    bytes_sent += size;
                     // send server termination message
                     if (rx_flags & 1) {
                         puts("FIN");
@@ -212,13 +211,6 @@ void tcp_upload(char* filename, int sockfd)
     time_t trans_time = time(NULL) - start_transfer;
     print_trans_results(bytes_sent, trans_time);
     fclose(file);
-}
-
-void print_trans_results(long bytes_sent, time_t trans_time)
-{
-    printf("%ld bytes transferred in: %lds\n", bytes_sent, trans_time);
-    printf("Transfer speed is: %f Mb/s \n",
-            ((float)bytes_sent * 8 / trans_time) / (1000 * 1000));
 }
 
 void show_tcp_help()
