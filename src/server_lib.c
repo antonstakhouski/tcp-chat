@@ -140,6 +140,7 @@ int tcp_upload(int newsockfd)
             printf("Error: %s in line %d\n", strerror(n), __LINE__);
             return -1;
         }
+        /*printf("Packet length: %d\n", n);*/
         bytes_received += n;
         filesize -= fwrite(buffer, 1, n, out_file);
     }

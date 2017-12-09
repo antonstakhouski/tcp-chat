@@ -11,9 +11,9 @@ SERVER_SOURCES= server.c server_lib.c
 
 OBJECTS = $(patsubst %.c,$(BUILDDIR)/%.o,$(SOURCES))
 
-EXECUTABLE ?= client
+EXECUTABLE ?= lin-client
 
-BBB_ADDR="debian@192.168.7.2:~/"
+BBB_ADDR="debian@192.168.0.105:~/"
 RPI_ADDR="pi@192.168.12.213:~/"
 
 BBB_PASS="temppwd"
@@ -22,13 +22,13 @@ RPI_PASS="raspberry"
 BBB_CC = arm-linux-gnueabihf-gcc
 RPI_CC = /bin/arm-bcm2708-linux-gnueabi/gcc
 
-ARM_CC = $(BBB_CC)
-R_ADDR=$(RPI_ADDR)
-R_PASS=$(RPI_PASS)
+#ARM_CC = $(BBB_CC)
+#R_ADDR=$(RPI_ADDR)
+#R_PASS=$(RPI_PASS)
 
-# ARM_CC = $(BBB_CC)
-# R_ADDR=$(BBB_ADDR)
-# R_PASS=$(BBB_PASS)
+ ARM_CC = $(BBB_CC)
+ R_ADDR=$(BBB_ADDR)
+ R_PASS=$(BBB_PASS)
 
 .PHONY: clean lin-client arm-client
 

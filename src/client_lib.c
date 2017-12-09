@@ -37,9 +37,9 @@ void udp_upload(char* filename, int sockfd, const struct sockaddr* server)
 {
     FILE* file;
     char buffer[MAX_LEN];
-    int bytes_sent = 0;
+    unsigned int bytes_sent = 0;
     int res = 0;
-    int data_sent = 0;
+    unsigned int data_sent = 0;
     unsigned int length = sizeof(struct sockaddr_in);
 
     if(!(file = fopen(filename, "rb"))) {
@@ -69,7 +69,7 @@ void udp_upload(char* filename, int sockfd, const struct sockaddr* server)
         return;
     } else {
         bytes_sent += res;
-        printf("%d bytes sent\n", bytes_sent);
+        /*printf("%d bytes sent\n", bytes_sent);*/
     }
 
     memset(buffer, 0, MAX_LEN);
@@ -105,13 +105,13 @@ void udp_upload(char* filename, int sockfd, const struct sockaddr* server)
     fclose(file);
 }
 
-void tcp_upload(char* filename, int sockfd)
+void tcp_upload(char* filename, int sockfd, enum oob_mode curr_oob_mode)
 {
     FILE* file;
     char buffer[MAX_LEN];
-    long bytes_sent = 0;
+    unsigned int bytes_sent = 0;
     int res = 0;
-    int data_sent = 0;
+    unsigned int data_sent = 0;
 
     if(!(file = fopen(filename, "rb"))) {
         puts("error opening file");
@@ -140,40 +140,48 @@ void tcp_upload(char* filename, int sockfd)
         return;
     } else {
         bytes_sent += res;
-        printf("%ld bytes sent\n", bytes_sent);
+        printf("%d bytes sent\n", res);
     }
 
     memset(buffer, 0, MAX_LEN);
 
     int oob_counter = 0;
-    int oob_interval = 1000;
+    int oob_interval = 4000;
     while (( size = fread(buffer, 1, MAX_LEN, file))) {
         if ((res = send(sockfd, buffer, size, 0)) < 0) {
             printf("Error %s\n", strerror(res));
             return;
         } else {
+            /*printf("%d bytes sent\n", res);*/
             bytes_sent += res;
             data_sent += res;
         }
         memset(buffer, 0, MAX_LEN);
+        if (curr_oob_mode == OOB_ON)
+            send_OOB_data(sockfd, oob_counter, oob_interval, data_sent, filesize);
+    }
+    time_t trans_time = time(NULL) - start_transfer;
+    print_trans_results(bytes_sent, trans_time);
+    fclose(file);
+}
 
+void send_OOB_data(int sockfd, int oob_counter, int oob_interval, int data_sent, int filesize)
+{
+    int res;
         char procents = ((data_sent * 100) / filesize) % 10;
         if (oob_counter > oob_interval) {
             if ((res = send(sockfd, (char*)&procents, sizeof(procents), MSG_OOB)) < 0) {
                 printf("Error %s\n", strerror(res));
                 return;
             } else {
-                /** printf("OOB data: %d\n", procents); */
+                /*printf("OOB data: %d\n", procents); */
             }
             oob_counter = 0;
         }
         else {
             oob_counter++;
         }
-    }
-    time_t trans_time = time(NULL) - start_transfer;
-    print_trans_results(bytes_sent, trans_time);
-    fclose(file);
+
 }
 
 void print_trans_results(long bytes_sent, time_t trans_time)
@@ -217,7 +225,7 @@ void tcp_loop(int sockfd)
             char filename[256];
             puts("Enter filename");
             scanf("%s", filename);
-            tcp_upload(filename, sockfd);
+            tcp_upload(filename, sockfd, OOB_OFF);
         }
         if (!strcmp(cmd, CLOSE_STR)) {
             send(sockfd, cmd, strlen(cmd), 0);
