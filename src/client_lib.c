@@ -51,7 +51,6 @@ void udp_upload(char* filename, int sockfd, const struct sockaddr* server)
             server, length);
     if (res < 0) error("sendto");
 
-    size_t size = 0;
     strcpy(tx_buffer, filename);
     strcat(tx_buffer, "\n");
 
@@ -63,6 +62,7 @@ void udp_upload(char* filename, int sockfd, const struct sockaddr* server)
     printf("Filesize: %ld\n", filesize);
 
     time_t start_transfer = time(NULL);
+    time_t trans_time;
     if ((res = sendto(sockfd, tx_buffer, char_end + sizeof(filesize), 0,
                     server, length)) < 0) {
         printf("Error %s\n", strerror(res));
@@ -74,11 +74,21 @@ void udp_upload(char* filename, int sockfd, const struct sockaddr* server)
 
     memset(tx_buffer, 0, MAX_LEN);
     int sn = 0, an = -1;
+    unsigned char tx_flags = 0;
+    unsigned char rx_flags = 0;
     memcpy(tx_buffer, &sn, sizeof(sn));
+    memcpy(tx_buffer + sizeof(sn), &tx_flags, sizeof(tx_flags));
     int ack_size;
     struct sockaddr_in from;
+    int header_len = sizeof(sn) + sizeof(tx_flags);
 
-    while (( size = fread(tx_buffer + sizeof(sn), 1, MAX_LEN - sizeof(sn), file))) {
+    size_t size = 1;
+    while (1) {
+        size = fread(tx_buffer + header_len, 1, MAX_LEN - header_len, file);
+        // set FIN flag
+        if (!size)
+            tx_flags |= 1;
+        memcpy(tx_buffer + sizeof(sn), &tx_flags, sizeof(tx_flags));
         if ((res = sendto(sockfd, tx_buffer, MAX_LEN, 0, server, length)) < 0) {
             printf("Error %s\n", strerror(res));
             return;
@@ -90,6 +100,7 @@ void udp_upload(char* filename, int sockfd, const struct sockaddr* server)
                 ack_size = recvfrom(sockfd, rx_buffer, MAX_LEN, 0, (struct sockaddr *)&from, &length);
                 if (ack_size < 0) error("recvfrom");
                 an = *((int*)rx_buffer);
+                rx_flags = *((unsigned char*)(rx_buffer + sizeof(an)));
                 printf("SN: %d ", sn);
                 printf("AN: %d\n", an);
 
@@ -103,6 +114,20 @@ void udp_upload(char* filename, int sockfd, const struct sockaddr* server)
                         return;
                     }
                 } else {
+                    // send server termination message
+                    if (rx_flags & 1) {
+                        puts("FIN");
+                        memset(tx_buffer, 0, MAX_LEN);
+                        sn++;
+                        memcpy(tx_buffer, &sn, sizeof(sn));
+                        tx_flags &= ~1;
+                        memcpy(tx_buffer + sizeof(sn), &tx_flags, sizeof(tx_flags));
+                        if ((res = sendto(sockfd, tx_buffer, MAX_LEN, 0, server, length)) < 0) {
+                            printf("Error %s\n", strerror(res));
+                            return;
+                        }
+                        goto END_CLIENT_UDP_TRANSFER;
+                    }
                     break;
                 }
             }
@@ -112,8 +137,10 @@ void udp_upload(char* filename, int sockfd, const struct sockaddr* server)
             memcpy(tx_buffer, &sn, sizeof(sn));
         }
     }
-    time_t trans_time = time(NULL) - start_transfer;
+END_CLIENT_UDP_TRANSFER:
+    trans_time = time(NULL) - start_transfer;
     print_trans_results(bytes_sent, trans_time);
+    fflush(stdout);
     fclose(file);
 }
 

@@ -53,8 +53,11 @@ int udp_upload(int newsockfd)
     int an = 0;
     int ack_size;
     int bytes_to_write;
+    unsigned char tx_flags = 0;
+    unsigned char rx_flags = 0;
+    int header_len = sizeof(sn) + sizeof(tx_flags);
     // read from socket to file
-    while (filesize > 0) {
+    while (1) {
         memset(rx_buffer, 0, MAX_LEN);
         if ((n = recvfrom(newsockfd, rx_buffer, MAX_LEN, 0, (struct sockaddr*)&from, &fromlen)) < 0) {
             printf("Error: %s", strerror(n));
@@ -62,19 +65,36 @@ int udp_upload(int newsockfd)
         }
         while(an != sn) {
             sn = *((int*)rx_buffer);
+            rx_flags = *((unsigned char*)(rx_buffer + sizeof(sn)));
             printf("SN: %d ", sn);
             printf("AN: %d\n", an);
             bytes_received += n;
             if (sn == an) {
                 an++;
-                bytes_to_write = MIN(n - sizeof(sn), filesize);
-                filesize -= fwrite(rx_buffer + sizeof(sn), 1, bytes_to_write, out_file);
-                if (filesize <= 0) {
-                    // need to close connection properly
+                if (tx_flags) {
+                    goto END_SERVER_UDP_TRANSFER;
+                }
+                if (rx_flags & 1) {
+                    puts("FIN");
                     fflush(stdout);
+                    tx_flags |= 1;
+                    memcpy(tx_buffer, &an, sizeof(an));
+                    memcpy(tx_buffer + sizeof(an), &tx_flags, sizeof(tx_flags));
+                    ack_size  = sendto(newsockfd, tx_buffer, MAX_LEN, 0, (struct sockaddr *)&from, fromlen);
+                    if (ack_size < 0) error("recvfrom");
+                    sn = -1;
                     break;
                 }
+
+                if (filesize > 0) {
+                    bytes_to_write = MIN(n - header_len, filesize);
+                    filesize -= fwrite(rx_buffer + header_len, 1, bytes_to_write, out_file);
+                }
+                else
+                    puts("File got");
+
                 memcpy(tx_buffer, &an, sizeof(an));
+                memcpy(tx_buffer + sizeof(an), &tx_flags, sizeof(tx_flags));
                 ack_size  = sendto(newsockfd, tx_buffer, MAX_LEN, 0, (struct sockaddr *)&from, fromlen);
                 if (ack_size < 0) error("recvfrom");
                 sn = -1;
@@ -92,6 +112,7 @@ int udp_upload(int newsockfd)
             }
         }
     }
+END_SERVER_UDP_TRANSFER:
     fclose(out_file);
     puts("File received");
     fflush(stdout);
