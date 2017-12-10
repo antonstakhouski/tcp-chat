@@ -36,8 +36,9 @@ void echo(int sockfd)
 void udp_upload(char* filename, int sockfd, const struct sockaddr* server)
 {
     FILE* file;
-    char tx_buffer[MAX_LEN] = {0};
+    char tx_buffer[BUFFER_LEN] = {0};
     char rx_buffer[MAX_LEN] = {0};
+    int buff_elemens = 0;
     unsigned int bytes_sent = 0;
     unsigned int bytes_lost = 0;
     int res = 0;
@@ -82,59 +83,83 @@ void udp_upload(char* filename, int sockfd, const struct sockaddr* server)
     time_t start_transfer = time(NULL);
     time_t trans_time;
     size_t size = 1;
+    
+    int first_sn = 0;
+
     while (1) {
-        size = fread(tx_buffer + header_len, 1, MAX_LEN - header_len, file);
-        // set FIN flag
-        if (!size)
-            tx_flags |= 1;
-        memcpy(tx_buffer + sizeof(sn), &tx_flags, sizeof(tx_flags));
-        if ((res = sendto(sockfd, tx_buffer, MAX_LEN, 0, server, length)) < 0) {
-            printf("Error %s\n", strerror(res));
-            return;
-        } else {
-            while (an <= sn) {
-                memset(rx_buffer, 0, MAX_LEN);
+        // form BUFF_ELEMENTS packets
+        first_sn = sn;
+        buff_elemens = 0;
+        memset(tx_buffer, 0, BUFFER_LEN);
+        while (buff_elemens < BUFF_ELEMENTS) {
+            // form new packet
+            size = fread(tx_buffer + MAX_LEN * buff_elemens + header_len, 1, MAX_LEN - header_len, file);
+            // set FIN flag
+            if (!size) {
+                /*puts("FIN sent");*/
+                tx_flags |= 1;
+            }
+            memcpy(tx_buffer + MAX_LEN * buff_elemens, &sn, sizeof(sn));
+            memcpy(tx_buffer + MAX_LEN * buff_elemens + sizeof(sn), &tx_flags, sizeof(tx_flags));
+            /*printf("SN: %d\n", sn);*/
+            sn++;
+            buff_elemens++;
+            if (!size)
+                break;
+        }
+        
+        // transfer all packets
+        for(int i = 0; i < buff_elemens; i++)
+        {
+            if ((res = sendto(sockfd, tx_buffer + i * MAX_LEN, MAX_LEN, 0, server, length)) < 0) {
+                printf("Error %s\n", strerror(res));
+                return;
+            }
+        }
 
-                // receive ACK
-                ack_size = recvfrom(sockfd, rx_buffer, MAX_LEN, 0, (struct sockaddr *)&from, &length);
-                if (ack_size < 0) error("recvfrom");
-                an = *((int*)rx_buffer);
-                rx_flags = *((unsigned char*)(rx_buffer + sizeof(an)));
-                printf("SN: %d ", sn);
-                printf("AN: %d\n", an);
+        // wait ACK
+        while (an < sn) {
+            memset(rx_buffer, 0, MAX_LEN);
 
-                // ACK was lost. retransmit package
-                if (an <= sn) {
-                    bytes_lost += res;
-                    printf("Packet %d lost\n", sn);
+            // receive ACK
+            ack_size = recvfrom(sockfd, rx_buffer, MAX_LEN, 0, (struct sockaddr *)&from, &length);
+            if (ack_size < 0) error("recvfrom");
+            an = *((int*)rx_buffer);
+            rx_flags = *((unsigned char*)(rx_buffer + sizeof(an)));
+            /*printf("SN: %d ", sn);*/
+            /*printf("AN: %d\n", an);*/
+
+            // ACK was lost. retransmit package
+            if (an < sn) {
+                bytes_lost += res;
+                printf("Packet %d lost\n", an);
+                if ((res = sendto(sockfd, tx_buffer + (an - first_sn) * MAX_LEN, MAX_LEN, 0, server, length)) < 0) {
+                    printf("Error %s\n", strerror(res));
+                    return;
+                }
+            } else {
+                bytes_sent += size; //TODO Make right counting
+                
+                // TODO make this working
+                // send server termination message
+                if (rx_flags & 1) {
+                    /*puts("FIN received");*/
+                    memset(tx_buffer, 0, BUFFER_LEN);
+                    sn++;
+                    memcpy(tx_buffer, &sn, sizeof(sn));
+                    tx_flags &= ~1;
+                    memcpy(tx_buffer + sizeof(sn), &tx_flags, sizeof(tx_flags));
                     if ((res = sendto(sockfd, tx_buffer, MAX_LEN, 0, server, length)) < 0) {
                         printf("Error %s\n", strerror(res));
                         return;
                     }
-                } else {
-                    bytes_sent += size;
-                    // send server termination message
-                    if (rx_flags & 1) {
-                        puts("FIN");
-                        memset(tx_buffer, 0, MAX_LEN);
-                        sn++;
-                        memcpy(tx_buffer, &sn, sizeof(sn));
-                        tx_flags &= ~1;
-                        memcpy(tx_buffer + sizeof(sn), &tx_flags, sizeof(tx_flags));
-                        if ((res = sendto(sockfd, tx_buffer, MAX_LEN, 0, server, length)) < 0) {
-                            printf("Error %s\n", strerror(res));
-                            return;
-                        }
-                        goto END_CLIENT_UDP_TRANSFER;
-                    }
-                    break;
+                    goto END_CLIENT_UDP_TRANSFER;
                 }
+                break;
             }
-            sn++;
-            an = -1;
-            memset(tx_buffer, 0, MAX_LEN);
-            memcpy(tx_buffer, &sn, sizeof(sn));
         }
+        first_sn = sn;
+        an = -1;
     }
 END_CLIENT_UDP_TRANSFER:
     trans_time = time(NULL) - start_transfer;

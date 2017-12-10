@@ -50,6 +50,8 @@ void init_socket(int argc, char* argv[],
 void print_trans_results(long bytes_sent, time_t trans_time);
 
 #define MAX_LEN 1432
+#define BUFF_ELEMENTS  32
+#define BUFFER_LEN MAX_LEN * BUFF_ELEMENTS
 #define CLOSE_STR "CLOSE\n"
 #define TIME_STR "TIME\n"
 #define ECHO_STR "ECHO\n"
