@@ -19,17 +19,17 @@ void get_cmd(int opcode, char* cmd)
 
 void get_time(int sockfd)
 {
-    char buffer[MAX_LEN] = {0};
-    recv(sockfd, buffer, MAX_LEN, 0);
+    char buffer[TCP_MAX_LEN] = {0};
+    recv(sockfd, buffer, TCP_MAX_LEN, 0);
     printf("%s", buffer);
 }
 
 void echo(int sockfd)
 {
-    char buffer[MAX_LEN];
+    char buffer[TCP_MAX_LEN];
     scanf("%s", buffer);
     send(sockfd, buffer, strlen(buffer), 0);
-    recv(sockfd, buffer, MAX_LEN, 0);
+    recv(sockfd, buffer, TCP_MAX_LEN, 0);
     printf("%s\n", buffer);
 }
 
@@ -37,7 +37,7 @@ void udp_upload(char* filename, int sockfd, const struct sockaddr* server)
 {
     FILE* file;
     char tx_buffer[BUFFER_LEN] = {0};
-    char rx_buffer[MAX_LEN] = {0};
+    char rx_buffer[UDP_MAX_LEN] = {0};
     int buff_elemens = 0;
     unsigned int bytes_sent = 0;
     unsigned int bytes_lost = 0;
@@ -70,7 +70,7 @@ void udp_upload(char* filename, int sockfd, const struct sockaddr* server)
         printf("%d bytes sent\n", res);
     }
 
-    memset(tx_buffer, 0, MAX_LEN);
+    memset(tx_buffer, 0, UDP_MAX_LEN);
     int sn = 0, an = -1;
     unsigned char tx_flags = 0;
     unsigned char rx_flags = 0;
@@ -95,15 +95,15 @@ void udp_upload(char* filename, int sockfd, const struct sockaddr* server)
             memset(tx_buffer, 0, BUFFER_LEN);
             while (buff_elemens < BUFF_ELEMENTS) {
                 // form new packet
-                size = fread(tx_buffer + MAX_LEN * buff_elemens + header_len, 1, MAX_LEN - header_len, file);
+                size = fread(tx_buffer + UDP_MAX_LEN * buff_elemens + header_len, 1, UDP_MAX_LEN - header_len, file);
                 // set FIN flag
                 if (!size) {
                     puts("FIN sent");
                     tx_flags |= 1;
                 }
                 bytes_sent += size;
-                memcpy(tx_buffer + MAX_LEN * buff_elemens, &sn, sizeof(sn));
-                memcpy(tx_buffer + MAX_LEN * buff_elemens + sizeof(sn), &tx_flags, sizeof(tx_flags));
+                memcpy(tx_buffer + UDP_MAX_LEN * buff_elemens, &sn, sizeof(sn));
+                memcpy(tx_buffer + UDP_MAX_LEN * buff_elemens + sizeof(sn), &tx_flags, sizeof(tx_flags));
                 /*printf("SN: %d\n", sn);*/
                 sn++;
                 buff_elemens++;
@@ -114,7 +114,7 @@ void udp_upload(char* filename, int sockfd, const struct sockaddr* server)
             // transfer all packets
             for(int i = 0; i < buff_elemens; i++)
             {
-                if ((res = sendto(sockfd, tx_buffer + i * MAX_LEN, MAX_LEN, 0, server, length)) < 0) {
+                if ((res = sendto(sockfd, tx_buffer + i * UDP_MAX_LEN, UDP_MAX_LEN, 0, server, length)) < 0) {
                     printf("Error %s\n", strerror(res));
                     return;
                 }
@@ -123,10 +123,10 @@ void udp_upload(char* filename, int sockfd, const struct sockaddr* server)
 
         // wait ACK
         while (an < sn) {
-            memset(rx_buffer, 0, MAX_LEN);
+            memset(rx_buffer, 0, UDP_MAX_LEN);
 
             // receive ACK
-            ack_size = recvfrom(sockfd, rx_buffer, MAX_LEN, 0, (struct sockaddr *)&from, &length);
+            ack_size = recvfrom(sockfd, rx_buffer, UDP_MAX_LEN, 0, (struct sockaddr *)&from, &length);
             if (ack_size < 0) error("recvfrom");
             an = *((int*)rx_buffer);
             rx_flags = *((unsigned char*)(rx_buffer + sizeof(an)));
@@ -139,7 +139,7 @@ void udp_upload(char* filename, int sockfd, const struct sockaddr* server)
                 printf("Packet %d lost\n", an);
                 lost = 1;
                 for (int i = an; i < sn; i++) {
-                    if ((res = sendto(sockfd, tx_buffer + (i - first_sn) * MAX_LEN, MAX_LEN,
+                    if ((res = sendto(sockfd, tx_buffer + (i - first_sn) * UDP_MAX_LEN, UDP_MAX_LEN,
                                     0, server, length)) < 0) {
                         printf("Error %s\n", strerror(res));
                         return;
@@ -157,7 +157,7 @@ void udp_upload(char* filename, int sockfd, const struct sockaddr* server)
                     memcpy(tx_buffer, &sn, sizeof(sn));
                     tx_flags &= ~1;
                     memcpy(tx_buffer + sizeof(sn), &tx_flags, sizeof(tx_flags));
-                    if ((res = sendto(sockfd, tx_buffer, MAX_LEN, 0, server, length)) < 0) {
+                    if ((res = sendto(sockfd, tx_buffer, UDP_MAX_LEN, 0, server, length)) < 0) {
                         printf("Error %s\n", strerror(res));
                         return;
                     }
@@ -179,7 +179,7 @@ END_CLIENT_UDP_TRANSFER:
 void tcp_upload(char* filename, int sockfd)
 {
     FILE* file;
-    char buffer[MAX_LEN] = {0};
+    char buffer[TCP_MAX_LEN] = {0};
     unsigned int bytes_sent = 0;
     int res = 0;
     unsigned int data_sent = 0;
@@ -188,10 +188,10 @@ void tcp_upload(char* filename, int sockfd)
         puts("error opening file");
         return;
     }
-    send(sockfd, UPLOAD_STR, MAX_LEN, 0);
+    send(sockfd, UPLOAD_STR, TCP_MAX_LEN, 0);
 
     size_t size = 0;
-    memset(buffer, 0, MAX_LEN);
+    memset(buffer, 0, TCP_MAX_LEN);
     strcpy(buffer, filename);
     strcat(buffer, "\n");
 
@@ -208,15 +208,14 @@ void tcp_upload(char* filename, int sockfd)
         printf("Error %s\n", strerror(res));
         return;
     } else {
-        bytes_sent += res;
         printf("%d bytes sent\n", res);
     }
 
-    memset(buffer, 0, MAX_LEN);
+    memset(buffer, 0, TCP_MAX_LEN);
 
     int oob_counter = 0;
     int oob_interval = 4000;
-    while (( size = fread(buffer, 1, MAX_LEN, file))) {
+    while (( size = fread(buffer, 1, TCP_MAX_LEN, file))) {
         if ((res = send(sockfd, buffer, size, 0)) < 0) {
             printf("Error %s\n", strerror(res));
             return;
@@ -225,7 +224,7 @@ void tcp_upload(char* filename, int sockfd)
             bytes_sent += res;
             data_sent += res;
         }
-        memset(buffer, 0, MAX_LEN);
+        memset(buffer, 0, TCP_MAX_LEN);
 
         char procents = ((data_sent * 100) / filesize) % 10;
         if (oob_counter > oob_interval) {

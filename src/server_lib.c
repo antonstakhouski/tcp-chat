@@ -2,12 +2,12 @@
 
 int echo(char* buff, int newsockfd)
 {
-    char buffer[MAX_LEN] = {0};
+    char buffer[TCP_MAX_LEN] = {0};
 
     if (strlen(buff))
         puts(buff);
 
-    if (recv(newsockfd, buffer, MAX_LEN - 1, 0) < 0)
+    if (recv(newsockfd, buffer, TCP_MAX_LEN - 1, 0) < 0)
         return -1;
     if (send(newsockfd, buffer, strlen(buffer), 0) < 0)
         return -1;
@@ -25,8 +25,8 @@ int compare_int( const void* a, const void* b )
 int udp_upload(int newsockfd)
 {
     char rx_buffer[BUFFER_LEN] = {0};
-    char buffer[MAX_LEN] = {0};
-    char tx_buffer[MAX_LEN] = {0};
+    char buffer[UDP_MAX_LEN] = {0};
+    char tx_buffer[UDP_MAX_LEN] = {0};
     int n;
     char filename[256] = {0};
     char* size_pos;
@@ -39,7 +39,7 @@ int udp_upload(int newsockfd)
 
 
     // if we get no info after command
-    if ((n = recvfrom(newsockfd, rx_buffer, MAX_LEN, 0,
+    if ((n = recvfrom(newsockfd, rx_buffer, UDP_MAX_LEN, 0,
                     (struct sockaddr*)&from, &fromlen)) < 0) {
         printf("Error: %s", strerror(n));
         return -1;
@@ -73,8 +73,10 @@ int udp_upload(int newsockfd)
     int sn_array[BUFF_ELEMENTS] = {-1};
     fd_set readfds;
     struct timeval timeleft;
-    timeleft.tv_sec = 1;
-    timeleft.tv_usec = 0;
+    long sec = 0;
+    long nsec = 50000;
+    timeleft.tv_sec = sec;
+    timeleft.tv_usec = nsec;
     int sel_res;
     int lost = 0;
     // read from socket to file
@@ -91,8 +93,8 @@ int udp_upload(int newsockfd)
 
         while(buff_elemens < BUFF_ELEMENTS) {
             FD_SET(newsockfd, &readfds);
-            timeleft.tv_sec = 1;
-            timeleft.tv_usec = 0;
+            timeleft.tv_sec = sec;
+            timeleft.tv_usec = nsec;
             if ((sel_res = select( newsockfd + 1, &readfds, NULL, NULL, &timeleft)) < 0) {
                 printf("Error: %s in line %d\n", strerror(n), __LINE__);
             } else if (!sel_res) {
@@ -102,8 +104,8 @@ int udp_upload(int newsockfd)
             } else {
                 if (FD_ISSET(newsockfd, &readfds)){ 
                     FD_CLR(newsockfd, &readfds);
-                    memset(buffer, 0, MAX_LEN);
-                    if ((n = recvfrom(newsockfd, buffer, MAX_LEN, 0, (struct sockaddr*)&from, &fromlen)) < 0) {
+                    memset(buffer, 0, UDP_MAX_LEN);
+                    if ((n = recvfrom(newsockfd, buffer, UDP_MAX_LEN, 0, (struct sockaddr*)&from, &fromlen)) < 0) {
                         printf("Error: %s", strerror(n));
                         return -1;
                     } else if (!n) {
@@ -122,7 +124,8 @@ int udp_upload(int newsockfd)
                     }
 
                     // TODO fix buffer size
-                    memcpy(rx_buffer + (sn - first_an) * (MAX_LEN - header_len), buffer + header_len, MAX_LEN);
+                    memcpy(rx_buffer + (sn - first_an) * (UDP_MAX_LEN - header_len),
+                            buffer + header_len, UDP_MAX_LEN);
                     sn_array[sn - first_an] = sn;
                     buff_elemens++;
 
@@ -173,8 +176,8 @@ int udp_upload(int newsockfd)
         if ((!(an - buff_elemens - first_an) && !lost ) || (rx_flags & 1)) {
             /*printf("All packets received\n");*/
             if (filesize > 0) {
-                // TODO if packet size is not MAX_LEN - all is bad :(
-                bytes_to_write = MIN((MAX_LEN - header_len) * buff_elemens, filesize);
+                // TODO if packet size is not UDP_MAX_LEN - all is bad :(
+                bytes_to_write = MIN((UDP_MAX_LEN - header_len) * buff_elemens, filesize);
                 filesize -= fwrite(rx_buffer, 1, bytes_to_write, out_file);
                 bytes_received += bytes_to_write;
             }
@@ -185,7 +188,7 @@ int udp_upload(int newsockfd)
             /*puts("FIN sent");*/
             memcpy(tx_buffer, &an, sizeof(an));
             memcpy(tx_buffer + sizeof(an), &tx_flags, sizeof(tx_flags));
-            ack_size  = sendto(newsockfd, tx_buffer, MAX_LEN, 0, (struct sockaddr *)&from, fromlen);
+            ack_size  = sendto(newsockfd, tx_buffer, UDP_MAX_LEN, 0, (struct sockaddr *)&from, fromlen);
             if (ack_size < 0) error("recvfrom");
             sn = -1;
             first_an = an;
@@ -200,7 +203,7 @@ int udp_upload(int newsockfd)
         /*printf("AN: %d\n", an);*/
         memcpy(tx_buffer, &an, sizeof(an));
         memcpy(tx_buffer + sizeof(an), &tx_flags, sizeof(tx_flags));
-        ack_size  = sendto(newsockfd, tx_buffer, MAX_LEN, 0, (struct sockaddr *)&from, fromlen);
+        ack_size  = sendto(newsockfd, tx_buffer, UDP_MAX_LEN, 0, (struct sockaddr *)&from, fromlen);
         if (ack_size < 0) error("recvfrom");
 
     }
@@ -215,7 +218,7 @@ END_SERVER_UDP_TRANSFER:
 
 int tcp_upload(int newsockfd)
 {
-    char buffer[MAX_LEN] = {0};
+    char buffer[TCP_MAX_LEN] = {0};
     int n;
     char filename[256] = {0};
     char* size_pos;
@@ -226,11 +229,10 @@ int tcp_upload(int newsockfd)
 
     // if we get no info after command
     time_t start_transfer = time(NULL);
-    if ((n = recv(newsockfd, buffer, MAX_LEN, 0)) < 0) {
+    if ((n = recv(newsockfd, buffer, TCP_MAX_LEN, 0)) < 0) {
         printf("Error: %s in line %d\n", strerror(n), __LINE__);
         return -1;
     }
-    bytes_received += n;
     size_pos = strstr(buffer, "\n");
     filename_len = size_pos - buffer;
     printf("Filename len: %zu\n", filename_len);
@@ -245,6 +247,7 @@ int tcp_upload(int newsockfd)
     printf("Filesize: %" PRId64 "\n", filesize);
     size_t predata = size_pos + sizeof(filesize) - buffer;
     filesize -= fwrite(size_pos + sizeof(filesize), 1, n - predata, out_file);
+    bytes_received += n - predata;
 
     fd_set set, set_error;
     struct timeval timeleft = {30, 0};
@@ -260,8 +263,8 @@ int tcp_upload(int newsockfd)
             break;
         } else {
             if (FD_ISSET(newsockfd, &set_error)) {
-                memset(buffer, 0, MAX_LEN);
-                if ((n = recv(newsockfd, buffer, MAX_LEN, MSG_OOB)) < 0) {
+                memset(buffer, 0, TCP_MAX_LEN);
+                if ((n = recv(newsockfd, buffer, TCP_MAX_LEN, MSG_OOB)) < 0) {
                     printf("Error: %s in line %d\n", strerror(n), __LINE__);
                     return -1;
                 }
@@ -275,8 +278,8 @@ int tcp_upload(int newsockfd)
                 return -1;
             }
 
-            memset(buffer, 0, MAX_LEN);
-            if ((n = recv(newsockfd, buffer, MAX_LEN, 0)) < 0) {
+            memset(buffer, 0, TCP_MAX_LEN);
+            if ((n = recv(newsockfd, buffer, TCP_MAX_LEN, 0)) < 0) {
                 printf("Error: %s in line %d\n", strerror(n), __LINE__);
                 return -1;
             }
@@ -306,7 +309,7 @@ int send_time(int newsockfd)
 
 void udp_loop(int sockfd)
 {
-    char buffer[MAX_LEN];
+    char buffer[UDP_MAX_LEN];
     struct sockaddr_in from;
     int n;
     socklen_t fromlen;
@@ -314,8 +317,8 @@ void udp_loop(int sockfd)
 
     puts("Server is ready");
     while (1) {
-        memset(buffer, 0, MAX_LEN);
-        if ((n = recvfrom(sockfd, buffer, MAX_LEN, 0,
+        memset(buffer, 0, UDP_MAX_LEN);
+        if ((n = recvfrom(sockfd, buffer, UDP_MAX_LEN, 0,
                         (struct sockaddr *) &from,  &fromlen)) >= 0) {
             if (!strncmp(buffer, UPLOAD_STR, strlen(UPLOAD_STR))) {
                 if(udp_upload(sockfd) < 0)
@@ -329,7 +332,7 @@ void udp_loop(int sockfd)
 
 void tcp_loop(int sockfd)
 {
-    char buffer[MAX_LEN];
+    char buffer[TCP_MAX_LEN];
     struct sockaddr_in cli_addr;
     socketlen clilen;
 
@@ -345,8 +348,8 @@ void tcp_loop(int sockfd)
                 &clilen);
 
         while (1) {
-            memset(buffer, 0, MAX_LEN);
-            if ((n = recv(newsockfd, buffer, MAX_LEN, 0)) > 0) {
+            memset(buffer, 0, TCP_MAX_LEN);
+            if ((n = recv(newsockfd, buffer, TCP_MAX_LEN, 0)) > 0) {
                 if (n < 0)
                     break;
                 if (!strncmp(buffer, CLOSE_STR, strlen(CLOSE_STR))) {
