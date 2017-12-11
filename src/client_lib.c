@@ -33,12 +33,23 @@ void echo(int sockfd)
     printf("%s\n", buffer);
 }
 
+// TODO add thie func to header
+void swap_buffers(char** send_buff, char** read_buff)
+{
+    char* p;
+    p = *send_buff;
+    *send_buff= *read_buff;
+    *read_buff= p;
+}
+
 void udp_upload(char* filename, int sockfd, const struct sockaddr* server)
 {
     FILE* file;
-    char tx_buffer[BUFFER_LEN] = {0};
-    char rx_buffer[UDP_MAX_LEN] = {0};
-    int buff_elemens = 0;
+    char tx_buffer1[BUFFER_LEN] = {0};
+    char tx_buffer2[BUFFER_LEN] = {0};
+    char rx_buffer[HEADER_LEN] = {0};
+    char *send_buff;
+    char *read_buff;
     unsigned int bytes_sent = 0;
     unsigned int bytes_lost = 0;
     int res = 0;
@@ -52,17 +63,17 @@ void udp_upload(char* filename, int sockfd, const struct sockaddr* server)
             server, length);
     if (res < 0) error("sendto");
 
-    strcpy(tx_buffer, filename);
-    strcat(tx_buffer, "\n");
+    strcpy(tx_buffer1, filename);
+    strcat(tx_buffer1, "\n");
 
     fseek(file, 0L, SEEK_END);
     long filesize = ftell(file);
     rewind(file);
-    int char_end = strlen(tx_buffer);
-    memcpy(tx_buffer + char_end, &filesize, sizeof(filesize));
+    int char_end = strlen(tx_buffer1);
+    memcpy(tx_buffer1 + char_end, &filesize, sizeof(filesize));
     printf("Filesize: %ld\n", filesize);
 
-    if ((res = sendto(sockfd, tx_buffer, char_end + sizeof(filesize), 0,
+    if ((res = sendto(sockfd, tx_buffer1, char_end + sizeof(filesize), 0,
                     server, length)) < 0) {
         printf("Error %s\n", strerror(res));
         return;
@@ -70,15 +81,12 @@ void udp_upload(char* filename, int sockfd, const struct sockaddr* server)
         printf("%d bytes sent\n", res);
     }
 
-    memset(tx_buffer, 0, UDP_MAX_LEN);
+    memset(tx_buffer1, 0, char_end + sizeof(filesize));
     int sn = 0, an = -1;
     unsigned char tx_flags = 0;
     unsigned char rx_flags = 0;
-    memcpy(tx_buffer, &sn, sizeof(sn));
-    memcpy(tx_buffer + sizeof(sn), &tx_flags, sizeof(tx_flags));
     int ack_size;
     struct sockaddr_in from;
-    int header_len = sizeof(sn) + sizeof(tx_flags);
 
     time_t start_transfer = time(NULL);
     time_t trans_time;
@@ -87,59 +95,85 @@ void udp_upload(char* filename, int sockfd, const struct sockaddr* server)
     int first_sn = 0;
     int lost = 0;
 
+    // double bufferization
+    read_buff = tx_buffer1;
+    send_buff = tx_buffer2;
+
+    int buff_elements = 0;
+    memset(read_buff, 0, BUFFER_LEN);
+    while (buff_elements < BUFF_ELEMENTS) {
+        // form new packet
+        size = fread(read_buff + UDP_MAX_LEN * buff_elements + HEADER_LEN, 1, UDP_MAX_LEN - HEADER_LEN, file);
+        // set FIN flag
+        if (!size) {
+            /*puts("FIN sent");*/
+            tx_flags |= 1;
+        }
+        bytes_sent += size;
+        memcpy(read_buff + UDP_MAX_LEN * buff_elements, &sn, sizeof(sn));
+        memcpy(read_buff + UDP_MAX_LEN * buff_elements + sizeof(sn), &tx_flags, sizeof(tx_flags));
+        /*printf("SN: %d\n", sn);*/
+        sn++;
+        buff_elements++;
+        if (!size)
+            break;
+    }
+
     while (1) {
         // form BUFF_ELEMENTS packets
         if (!lost) {
-            first_sn = sn;
-            buff_elemens = 0;
-            memset(tx_buffer, 0, BUFFER_LEN);
-            while (buff_elemens < BUFF_ELEMENTS) {
-                // form new packet
-                size = fread(tx_buffer + UDP_MAX_LEN * buff_elemens + header_len, 1, UDP_MAX_LEN - header_len, file);
-                // set FIN flag
-                if (!size) {
-                    puts("FIN sent");
-                    tx_flags |= 1;
-                }
-                bytes_sent += size;
-                memcpy(tx_buffer + UDP_MAX_LEN * buff_elemens, &sn, sizeof(sn));
-                memcpy(tx_buffer + UDP_MAX_LEN * buff_elemens + sizeof(sn), &tx_flags, sizeof(tx_flags));
-                /*printf("SN: %d\n", sn);*/
-                sn++;
-                buff_elemens++;
-                if (!size)
-                    break;
-            }
-
             // transfer all packets
-            for(int i = 0; i < buff_elemens; i++)
+            swap_buffers(&read_buff, &send_buff);
+            first_sn = *((int*)send_buff);
+            for(int i = 0; i < buff_elements; i++)
             {
-                if ((res = sendto(sockfd, tx_buffer + i * UDP_MAX_LEN, UDP_MAX_LEN, 0, server, length)) < 0) {
+                if ((res = sendto(sockfd, send_buff + i * UDP_MAX_LEN, UDP_MAX_LEN, 0, server, length)) < 0) {
                     printf("Error %s\n", strerror(res));
                     return;
                 }
             }
+
+            buff_elements = 0;
+            memset(read_buff, 0, BUFFER_LEN);
+            while (buff_elements < BUFF_ELEMENTS) {
+                // form new packet
+                size = fread(read_buff + UDP_MAX_LEN * buff_elements + HEADER_LEN, 1, UDP_MAX_LEN - HEADER_LEN, file);
+                // set FIN flag
+                if (!size) {
+                    /*puts("FIN sent");*/
+                    tx_flags |= 1;
+                }
+                bytes_sent += size;
+                memcpy(read_buff + UDP_MAX_LEN * buff_elements, &sn, sizeof(sn));
+                memcpy(read_buff + UDP_MAX_LEN * buff_elements + sizeof(sn), &tx_flags, sizeof(tx_flags));
+                /*printf("SN: %d\n", sn);*/
+                sn++;
+                buff_elements++;
+                if (!size)
+                    break;
+            }
         }
 
         // wait ACK
-        while (an < sn) {
-            memset(rx_buffer, 0, UDP_MAX_LEN);
+        int new_sn = *((int*)read_buff); 
+        while (an < new_sn - 1) {
+            memset(rx_buffer, 0, HEADER_LEN);
 
             // receive ACK
-            ack_size = recvfrom(sockfd, rx_buffer, UDP_MAX_LEN, 0, (struct sockaddr *)&from, &length);
+            ack_size = recvfrom(sockfd, rx_buffer, HEADER_LEN, 0, (struct sockaddr *)&from, &length);
             if (ack_size < 0) error("recvfrom");
             an = *((int*)rx_buffer);
             rx_flags = *((unsigned char*)(rx_buffer + sizeof(an)));
-            /*printf("SN: %d ", sn);*/
+            /*printf("SN: %d ", new_sn);*/
             /*printf("AN: %d\n", an);*/
 
             // SOME packets lost
-            if (an < sn) {
+            if (an < new_sn - 1) {
                 bytes_lost += res;
                 printf("Packet %d lost\n", an);
                 lost = 1;
-                for (int i = an; i < sn; i++) {
-                    if ((res = sendto(sockfd, tx_buffer + (i - first_sn) * UDP_MAX_LEN, UDP_MAX_LEN,
+                for (int i = an; i < new_sn; i++) {
+                    if ((res = sendto(sockfd, send_buff + (i - first_sn) * UDP_MAX_LEN, UDP_MAX_LEN,
                                     0, server, length)) < 0) {
                         printf("Error %s\n", strerror(res));
                         return;
@@ -152,12 +186,12 @@ void udp_upload(char* filename, int sockfd, const struct sockaddr* server)
                 // send server termination message
                 if (rx_flags & 1) {
                     /*puts("FIN received");*/
-                    memset(tx_buffer, 0, BUFFER_LEN);
+                    memset(send_buff, 0, BUFFER_LEN);
                     sn++;
-                    memcpy(tx_buffer, &sn, sizeof(sn));
+                    memcpy(send_buff, &sn, sizeof(sn));
                     tx_flags &= ~1;
-                    memcpy(tx_buffer + sizeof(sn), &tx_flags, sizeof(tx_flags));
-                    if ((res = sendto(sockfd, tx_buffer, UDP_MAX_LEN, 0, server, length)) < 0) {
+                    memcpy(send_buff+ sizeof(sn), &tx_flags, sizeof(tx_flags));
+                    if ((res = sendto(sockfd, send_buff, HEADER_LEN, 0, server, length)) < 0) {
                         printf("Error %s\n", strerror(res));
                         return;
                     }
@@ -166,7 +200,6 @@ void udp_upload(char* filename, int sockfd, const struct sockaddr* server)
                 break;
             }
         }
-        first_sn = sn;
         an = -1;
     }
 END_CLIENT_UDP_TRANSFER:

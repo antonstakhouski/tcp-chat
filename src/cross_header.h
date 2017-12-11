@@ -50,9 +50,10 @@ void init_socket(int argc, char* argv[],
 void print_trans_results(long bytes_sent, time_t trans_time);
 
 #define TCP_MAX_LEN 1432
-#define UDP_MAX_LEN 65000
+#define HEADER_LEN 5
+#define UDP_MAX_LEN 10000
 //#define UDP_MAX_LEN 4096
-#define BUFF_ELEMENTS 64
+#define BUFF_ELEMENTS 32
 #define BUFFER_LEN UDP_MAX_LEN * BUFF_ELEMENTS
 #define CLOSE_STR "CLOSE\n"
 #define TIME_STR "TIME\n"
