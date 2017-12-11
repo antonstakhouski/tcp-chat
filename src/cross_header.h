@@ -49,8 +49,10 @@ void init_socket(int argc, char* argv[],
         int* sockfd, struct sockaddr_in* serv_addr, enum mode* current_mode);
 void print_trans_results(long bytes_sent, time_t trans_time);
 
-#define MAX_LEN 1432
-#define BUFF_ELEMENTS  32
+//#define MAX_LEN 1432
+//#define MAX_LEN 1560
+#define MAX_LEN 4096
+#define BUFF_ELEMENTS  16
 #define BUFFER_LEN MAX_LEN * BUFF_ELEMENTS
 #define CLOSE_STR "CLOSE\n"
 #define TIME_STR "TIME\n"

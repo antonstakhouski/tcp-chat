@@ -71,67 +71,114 @@ int udp_upload(int newsockfd)
     int first_an = 0;
 
     int sn_array[BUFF_ELEMENTS] = {-1};
+    fd_set readfds;
+    struct timeval timeleft;
+    timeleft.tv_sec = 1;
+    timeleft.tv_usec = 0;
+    int sel_res;
+    int lost = 0;
     // read from socket to file
     while (1) {
         // read incloming packets
-        memset(rx_buffer, 0, BUFFER_LEN);
-        first_an =  an;
-        buff_elemens = 0;
-        memset(sn_array, -1, BUFF_ELEMENTS * sizeof(sn_array[0]));
+        if (!lost) {
+            memset(rx_buffer, 0, BUFFER_LEN);
+            first_an =  an;
+            buff_elemens = 0;
+            memset(sn_array, -1, BUFF_ELEMENTS * sizeof(sn_array[0]));
+        } else{
+            buff_elemens = an - first_an;
+        }
 
         while(buff_elemens < BUFF_ELEMENTS) {
-            memset(buffer, 0, MAX_LEN);
-            if ((n = recvfrom(newsockfd, buffer, MAX_LEN, 0, (struct sockaddr*)&from, &fromlen)) < 0) {
-                printf("Error: %s", strerror(n));
-                return -1;
-            } else if (!n) {
+            FD_SET(newsockfd, &readfds);
+            timeleft.tv_sec = 1;
+            timeleft.tv_usec = 0;
+            if ((sel_res = select( newsockfd + 1, &readfds, NULL, NULL, &timeleft)) < 0) {
+                printf("Error: %s in line %d\n", strerror(n), __LINE__);
+            } else if (!sel_res) {
+                printf("Timeout occurred!\n");
+                lost = 1;
                 break;
-            }
-            sn = *((int*)buffer);
-            rx_flags = *((unsigned char*)(buffer + sizeof(sn)));
-            // TODO cheack rx_flags
-            /*printf("SN: %d ", sn);*/
-            /*printf("AN: %d\n", an);*/
+            } else {
+                if (FD_ISSET(newsockfd, &readfds)){ 
+                    FD_CLR(newsockfd, &readfds);
+                    memset(buffer, 0, MAX_LEN);
+                    if ((n = recvfrom(newsockfd, buffer, MAX_LEN, 0, (struct sockaddr*)&from, &fromlen)) < 0) {
+                        printf("Error: %s", strerror(n));
+                        return -1;
+                    } else if (!n) {
+                        break;
+                    }
+                    sn = *((int*)buffer);
+                    if (sn < first_an)
+                        break;
+                    rx_flags = *((unsigned char*)(buffer + sizeof(sn)));
+                    /*printf("SN: %d\n", sn);*/
 
-            // terminate connection
-            if (tx_flags & 1) {
-                break;
-            }
+                    // terminate connection
 
-            // TODO maybe better to copy only data
-            memcpy(rx_buffer + (sn - first_an) * MAX_LEN, buffer, MAX_LEN);
-            sn_array[sn - first_an] = sn;
-            buff_elemens++;
+                    if (tx_flags & 1) {
+                        break;
+                    }
 
-            if (rx_flags & 1) {
-                /*puts("FIN received");*/
-                break;
+                    // TODO fix buffer size
+                    memcpy(rx_buffer + (sn - first_an) * (MAX_LEN - header_len), buffer + header_len, MAX_LEN);
+                    sn_array[sn - first_an] = sn;
+                    buff_elemens++;
+
+                    if (rx_flags & 1) {
+                        /*puts("FIN received");*/
+                        break;
+                    }
+                }
             }
 
         }
 
         // sort sn array
-        qsort(sn_array, BUFF_ELEMENTS, sizeof(sn_array[0]), compare_int);
-        for (int i = 0; i < BUFF_ELEMENTS; i++) {
-            if (an == sn_array[i])
-                an++;
-            /*printf("%d ", sn_array[i]);*/
-        }
-        /*printf("\n");*/
-
-        // write data to file
-        if (!(an - buff_elemens - first_an)) {
-            /*printf("All packets received\n");*/
-            for (int i = 0; i < buff_elemens; i++)
-            {
-                if (filesize > 0) {
-                    // TODO if packet size is not MAX_LEN - all is bad :(
-                    bytes_to_write = MIN(MAX_LEN - header_len, filesize);
-                    filesize -= fwrite(rx_buffer + i * MAX_LEN +  header_len, 1, bytes_to_write, out_file);
-                    bytes_received += bytes_to_write;
-                }
+        /*printf("sorting\n");*/
+        /*qsort(sn_array, BUFF_ELEMENTS, sizeof(sn_array[0]), compare_int);*/
+        int valid;
+        int temp_an = -1;
+        for (valid = 0; valid < BUFF_ELEMENTS; valid++) {
+            /*printf("%d ", sn_array[valid]);*/
+            if (sn_array[valid] > -1) {
+                temp_an = sn_array[valid];
+                break;
             }
         }
+        if (temp_an > first_an)
+            temp_an = -1;
+        if (temp_an > -1) {
+            for (int i = valid; i < BUFF_ELEMENTS - 1; i++) {
+                if (temp_an + 1 == sn_array[i + 1]) {
+                    temp_an++;
+                } else {
+                    lost = 1;
+                }
+                /*printf("%d ", sn_array[i + 1]);*/
+            }
+            an = temp_an + 1;
+        }
+        
+
+        // TODO FIX THIS QUICK
+        if (an == sn_array[BUFF_ELEMENTS - 1] + 1) {
+            lost = 0;
+        }
+        /*printf("\n");*/
+        
+
+        // write data to file
+        if ((!(an - buff_elemens - first_an) && !lost ) || (rx_flags & 1)) {
+            /*printf("All packets received\n");*/
+            if (filesize > 0) {
+                // TODO if packet size is not MAX_LEN - all is bad :(
+                bytes_to_write = MIN((MAX_LEN - header_len) * buff_elemens, filesize);
+                filesize -= fwrite(rx_buffer, 1, bytes_to_write, out_file);
+                bytes_received += bytes_to_write;
+            }
+        } 
 
         if (rx_flags & 1) {
             tx_flags |= 1;
@@ -148,17 +195,14 @@ int udp_upload(int newsockfd)
         if ((tx_flags & 1) && !(rx_flags & 1)) {
             goto END_SERVER_UDP_TRANSFER;
         }
+        
+        // send ACK
+        /*printf("AN: %d\n", an);*/
+        memcpy(tx_buffer, &an, sizeof(an));
+        memcpy(tx_buffer + sizeof(an), &tx_flags, sizeof(tx_flags));
+        ack_size  = sendto(newsockfd, tx_buffer, MAX_LEN, 0, (struct sockaddr *)&from, fromlen);
+        if (ack_size < 0) error("recvfrom");
 
-        //send an ACK
-        if (!(an - buff_elemens - first_an)) {
-            memcpy(tx_buffer, &an, sizeof(an));
-            memcpy(tx_buffer + sizeof(an), &tx_flags, sizeof(tx_flags));
-            ack_size  = sendto(newsockfd, tx_buffer, MAX_LEN, 0, (struct sockaddr *)&from, fromlen);
-            if (ack_size < 0) error("recvfrom");
-        }
-        // TODO ad some timers and check if ACK was lost
-
-        first_an = an;
     }
 END_SERVER_UDP_TRANSFER:
     fclose(out_file);
@@ -181,6 +225,7 @@ int tcp_upload(int newsockfd)
     long bytes_received = 0;
 
     // if we get no info after command
+    time_t start_transfer = time(NULL);
     if ((n = recv(newsockfd, buffer, MAX_LEN, 0)) < 0) {
         printf("Error: %s in line %d\n", strerror(n), __LINE__);
         return -1;
@@ -202,44 +247,48 @@ int tcp_upload(int newsockfd)
     filesize -= fwrite(size_pos + sizeof(filesize), 1, n - predata, out_file);
 
     fd_set set, set_error;
-    int res;
     struct timeval timeleft = {30, 0};
+    int sel_res;
     // read from socket to file
     while (filesize > 0) {
         FD_SET(newsockfd, &set);
         FD_SET(newsockfd, &set_error);
-        if ((res = select( newsockfd + 1, &set, NULL, &set_error, &timeleft)) < 0) {
+        if ((sel_res = select( newsockfd + 1, &set, NULL, &set_error, &timeleft)) < 0) {
             printf("Error: %s in line %d\n", strerror(n), __LINE__);
-        }
+        } else if (!sel_res) {
+            printf("Timeout occurred!\n");
+            break;
+        } else {
+            if (FD_ISSET(newsockfd, &set_error)) {
+                memset(buffer, 0, MAX_LEN);
+                if ((n = recv(newsockfd, buffer, MAX_LEN, MSG_OOB)) < 0) {
+                    printf("Error: %s in line %d\n", strerror(n), __LINE__);
+                    return -1;
+                }
+                else{
+                    printf("OOB data: %d\n", *((int *)buffer));
+                }
+            } else if (!FD_ISSET(newsockfd, &set)) {
+                printf("Transfer error\n");
+                close_sock(newsockfd);
+                fclose(out_file);
+                return -1;
+            }
 
-        if (FD_ISSET(newsockfd, &set_error)) {
             memset(buffer, 0, MAX_LEN);
-            if ((n = recv(newsockfd, buffer, MAX_LEN, MSG_OOB)) < 0) {
+            if ((n = recv(newsockfd, buffer, MAX_LEN, 0)) < 0) {
                 printf("Error: %s in line %d\n", strerror(n), __LINE__);
                 return -1;
             }
-            else{
-                printf("OOB data: %d\n", *((int *)buffer));
-            }
-        } else if (!FD_ISSET(newsockfd, &set)) {
-            printf("Transfer error\n");
-            close_sock(newsockfd);
-            fclose(out_file);
-            return -1;
+            /*printf("Packet length: %d\n", n);*/
+            bytes_received += n;
+            filesize -= fwrite(buffer, 1, n, out_file);
         }
-
-        memset(buffer, 0, MAX_LEN);
-        if ((n = recv(newsockfd, buffer, MAX_LEN, 0)) < 0) {
-            printf("Error: %s in line %d\n", strerror(n), __LINE__);
-            return -1;
-        }
-        /*printf("Packet length: %d\n", n);*/
-        bytes_received += n;
-        filesize -= fwrite(buffer, 1, n, out_file);
     }
     fclose(out_file);
-    printf("%ld bytes received\n", bytes_received);
+    time_t trans_time = time(NULL) - start_transfer;
     puts("File received");
+    print_trans_results(bytes_received, trans_time);
     return 0;
 }
 

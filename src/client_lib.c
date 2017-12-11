@@ -85,35 +85,39 @@ void udp_upload(char* filename, int sockfd, const struct sockaddr* server)
     size_t size = 1;
     
     int first_sn = 0;
+    int lost = 0;
 
     while (1) {
         // form BUFF_ELEMENTS packets
-        first_sn = sn;
-        buff_elemens = 0;
-        memset(tx_buffer, 0, BUFFER_LEN);
-        while (buff_elemens < BUFF_ELEMENTS) {
-            // form new packet
-            size = fread(tx_buffer + MAX_LEN * buff_elemens + header_len, 1, MAX_LEN - header_len, file);
-            // set FIN flag
-            if (!size) {
-                /*puts("FIN sent");*/
-                tx_flags |= 1;
+        if (!lost) {
+            first_sn = sn;
+            buff_elemens = 0;
+            memset(tx_buffer, 0, BUFFER_LEN);
+            while (buff_elemens < BUFF_ELEMENTS) {
+                // form new packet
+                size = fread(tx_buffer + MAX_LEN * buff_elemens + header_len, 1, MAX_LEN - header_len, file);
+                // set FIN flag
+                if (!size) {
+                    puts("FIN sent");
+                    tx_flags |= 1;
+                }
+                bytes_sent += size;
+                memcpy(tx_buffer + MAX_LEN * buff_elemens, &sn, sizeof(sn));
+                memcpy(tx_buffer + MAX_LEN * buff_elemens + sizeof(sn), &tx_flags, sizeof(tx_flags));
+                /*printf("SN: %d\n", sn);*/
+                sn++;
+                buff_elemens++;
+                if (!size)
+                    break;
             }
-            memcpy(tx_buffer + MAX_LEN * buff_elemens, &sn, sizeof(sn));
-            memcpy(tx_buffer + MAX_LEN * buff_elemens + sizeof(sn), &tx_flags, sizeof(tx_flags));
-            /*printf("SN: %d\n", sn);*/
-            sn++;
-            buff_elemens++;
-            if (!size)
-                break;
-        }
-        
-        // transfer all packets
-        for(int i = 0; i < buff_elemens; i++)
-        {
-            if ((res = sendto(sockfd, tx_buffer + i * MAX_LEN, MAX_LEN, 0, server, length)) < 0) {
-                printf("Error %s\n", strerror(res));
-                return;
+
+            // transfer all packets
+            for(int i = 0; i < buff_elemens; i++)
+            {
+                if ((res = sendto(sockfd, tx_buffer + i * MAX_LEN, MAX_LEN, 0, server, length)) < 0) {
+                    printf("Error %s\n", strerror(res));
+                    return;
+                }
             }
         }
 
@@ -129,16 +133,20 @@ void udp_upload(char* filename, int sockfd, const struct sockaddr* server)
             /*printf("SN: %d ", sn);*/
             /*printf("AN: %d\n", an);*/
 
-            // ACK was lost. retransmit package
+            // SOME packets lost
             if (an < sn) {
                 bytes_lost += res;
                 printf("Packet %d lost\n", an);
-                if ((res = sendto(sockfd, tx_buffer + (an - first_sn) * MAX_LEN, MAX_LEN, 0, server, length)) < 0) {
-                    printf("Error %s\n", strerror(res));
-                    return;
+                lost = 1;
+                for (int i = an; i < sn; i++) {
+                    if ((res = sendto(sockfd, tx_buffer + (i - first_sn) * MAX_LEN, MAX_LEN,
+                                    0, server, length)) < 0) {
+                        printf("Error %s\n", strerror(res));
+                        return;
+                    }
                 }
             } else {
-                bytes_sent += size; //TODO Make right counting
+                lost = 0;
                 
                 // TODO make this working
                 // send server termination message

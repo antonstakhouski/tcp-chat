@@ -1,5 +1,5 @@
 CC ?= gcc
-CFLAGS=-c -Wall -g -O0 -pedantic -std=c11
+CFLAGS=-c -Wall -O3 -pedantic -std=c11
 LDFLAGS=
 
 SOURCEDIR = src
