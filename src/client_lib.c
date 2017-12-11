@@ -33,7 +33,6 @@ void echo(int sockfd)
     printf("%s\n", buffer);
 }
 
-// TODO add thie func to header
 void swap_buffers(char** send_buff, char** read_buff)
 {
     char* p;
@@ -182,8 +181,6 @@ void udp_upload(char* filename, int sockfd, const struct sockaddr* server)
             } else {
                 lost = 0;
                 
-                // TODO make this working
-                // send server termination message
                 if (rx_flags & 1) {
                     /*puts("FIN received");*/
                     memset(send_buff, 0, BUFFER_LEN);

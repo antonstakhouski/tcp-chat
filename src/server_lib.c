@@ -15,13 +15,6 @@ int echo(char* buff, int newsockfd)
     return 0;
 }
 
-// TODO add to header
-int compare_int( const void* a, const void* b )
-{
-    if( *(int*)a == *(int*)b ) return 0;
-    return *(int*)a < *(int*)b ? -1 : 1;
-}
-
 int udp_upload(int newsockfd)
 {
     char rx_buffer[BUFF_ELEMENTS * (UDP_MAX_LEN - HEADER_LEN)] = {0};
@@ -34,7 +27,7 @@ int udp_upload(int newsockfd)
     long filesize;
     size_t filename_len;
     int bytes_received = 0;
-    unsigned int fromlen = sizeof(struct sockaddr_in);
+    socketlen fromlen = sizeof(struct sockaddr_in);
     struct sockaddr_in from;
 
 
@@ -73,7 +66,7 @@ int udp_upload(int newsockfd)
     fd_set readfds;
     struct timeval timeleft;
     long sec = 0;
-    long nsec = 500000;
+    long nsec = 50000;
     timeleft.tv_sec = sec;
     timeleft.tv_usec = nsec;
     int sel_res;
@@ -122,7 +115,6 @@ int udp_upload(int newsockfd)
                         break;
                     }
 
-                    // TODO fix buffer size
                     memcpy(rx_buffer + (sn - first_an) * (UDP_MAX_LEN - HEADER_LEN),
                             buffer + HEADER_LEN, UDP_MAX_LEN - HEADER_LEN);
                     sn_array[sn - first_an] = sn;
@@ -139,7 +131,6 @@ int udp_upload(int newsockfd)
 
         // sort sn array
         /*printf("sorting\n");*/
-        /*qsort(sn_array, BUFF_ELEMENTS, sizeof(sn_array[0]), compare_int);*/
         int valid;
         int temp_an = -1;
         for (valid = 0; valid < BUFF_ELEMENTS; valid++) {
@@ -164,7 +155,6 @@ int udp_upload(int newsockfd)
         }
         
 
-        // TODO FIX THIS QUICK
         if (an == sn_array[BUFF_ELEMENTS - 1] + 1) {
             lost = 0;
         }
@@ -175,7 +165,6 @@ int udp_upload(int newsockfd)
         if ((!(an - buff_elements - first_an) && !lost ) || (rx_flags & 1)) {
             /*printf("All packets received\n");*/
             if (filesize > 0) {
-                // TODO if packet size is not UDP_MAX_LEN - all is bad :(
                 bytes_to_write = MIN((UDP_MAX_LEN - HEADER_LEN) * buff_elements, filesize);
                 filesize -= fwrite(rx_buffer, 1, bytes_to_write, out_file);
                 bytes_received += bytes_to_write;
@@ -249,13 +238,18 @@ int tcp_upload(int newsockfd)
     bytes_received += n - predata;
 
     fd_set set, set_error;
-    struct timeval timeleft = {30, 0};
+    struct timeval timeleft;
+    long sec = 30;
+    long nsec = 0;
+    timeleft.tv_sec = sec;
+    timeleft.tv_usec = nsec;
+
     int sel_res;
     // read from socket to file
     while (filesize > 0) {
         FD_SET(newsockfd, &set);
         FD_SET(newsockfd, &set_error);
-        if ((sel_res = select( newsockfd + 1, &set, NULL, &set_error, &timeleft)) < 0) {
+        if ((sel_res = select(newsockfd + 1, &set, NULL, &set_error, &timeleft)) < 0) {
             printf("Error: %s in line %d\n", strerror(n), __LINE__);
         } else if (!sel_res) {
             printf("Timeout occurred!\n");
@@ -312,7 +306,7 @@ void udp_loop(int sockfd)
     char buffer[UDP_MAX_LEN];
     struct sockaddr_in from;
     int n;
-    socklen_t fromlen;
+    socketlen fromlen;
     fromlen = sizeof(struct sockaddr_in);
 
     puts("Server is ready");
