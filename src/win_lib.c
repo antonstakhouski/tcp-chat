@@ -34,10 +34,10 @@ void set_keepalive(int sockfd)
 	}
 }
 
-void write_file(FILE* file, int nbytes, int offset) {
-		EnterCriticalSection(&(data->writerSection));
-		WaitForSingleObject(data->overRead.hEvent, INFINITE);	
-		data->overWrite.Offset = len;
-		len += strlen(buf);
-		WriteFile(hFile, buf, strlen(buf), NULL,  &(data->overWrite));
+void write_file(FILE* file, int nbytes, int offset, char* buffer) {
+    fwrite(buffer, 1, nbytes, file);
+}
+
+void close_file(FILE* file) {
+    fclose(file);
 }

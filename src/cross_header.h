@@ -55,7 +55,8 @@ void init_socket(int argc, char* argv[],
         int* sockfd, struct sockaddr_in* serv_addr, enum mode* current_mode);
 void print_trans_results(long bytes_sent, time_t trans_time);
 void write_file(FILE* file, int nbytes, int offset, char* buffer);
-void swap_buffers(char** send_buff, char** read_buff);
+void swap_buffers(char** buff1, char** buff2);
+void close_file(FILE* file);
 
 #define TCP_MAX_LEN 1432
 #define HEADER_LEN 5

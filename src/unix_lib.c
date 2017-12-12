@@ -59,3 +59,8 @@ void write_file(FILE* file, int nbytes, int offset, char* buffer) {
     aiocb_.aio_buf = buffer;
     aio_write(&aiocb_);
 }
+
+void close_file(FILE* file) {
+    while(aio_error(&aiocb_) == EINPROGRESS);
+    fclose(file);
+}

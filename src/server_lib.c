@@ -171,12 +171,11 @@ int udp_upload(int newsockfd)
             /*printf("All packets received\n");*/
             if (filesize > 0) {
                 bytes_to_write = MIN((UDP_MAX_LEN - HEADER_LEN) * buff_elements, filesize);
-                /*filesize -= fwrite(rx_buffer, 1, bytes_to_write, out_file);*/
-                /*bytes_received += bytes_to_write;*/
                 swap_buffers(&write_buff, &recv_buff);
-                write_file(out_file, bytes_to_write, bytes_received, write_buff);
+                filesize -= fwrite(write_buff, 1, bytes_to_write, out_file);
+                /*write_file(out_file, bytes_to_write, bytes_received, write_buff);*/
                 bytes_received += bytes_to_write;
-                filesize -= bytes_to_write;
+                /*filesize -= bytes_to_write;*/
             }
         } 
 
@@ -205,8 +204,7 @@ int udp_upload(int newsockfd)
 
     }
 END_SERVER_UDP_TRANSFER:
-    while(aio_error(&aiocb_) == EINPROGRESS);
-    fclose(out_file);
+    close_file(out_file);
     puts("File received");
     trans_time = time(NULL) - start_transfer;
     print_trans_results(bytes_received, trans_time);
