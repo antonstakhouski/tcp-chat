@@ -31,10 +31,16 @@ typedef unsigned int socketlen;
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/select.h>
+#include <aio.h>
 #define PLATFORM PLATFORM_UNIX
 
 #define h_addr h_addr_list[0] /* for backward compatibility */
 typedef socklen_t socketlen;
+
+#define _POSIX_C_SOURCE 1
+int fileno(FILE *stream);
+
+struct aiocb aiocb_;
 
 #endif //  defined(_WIN32) || defined(_WIN64)
 
@@ -48,6 +54,8 @@ void error(const char *msg);
 void init_socket(int argc, char* argv[],
         int* sockfd, struct sockaddr_in* serv_addr, enum mode* current_mode);
 void print_trans_results(long bytes_sent, time_t trans_time);
+void write_file(FILE* file, int nbytes, int offset, char* buffer);
+void swap_buffers(char** send_buff, char** read_buff);
 
 #define TCP_MAX_LEN 1432
 #define HEADER_LEN 5

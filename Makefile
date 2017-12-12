@@ -22,6 +22,8 @@ RPI_PASS="raspberry"
 BBB_CC = arm-linux-gnueabihf-gcc
 RPI_CC = /bin/arm-bcm2708-linux-gnueabi/gcc
 
+LIN_LDFLAGS= -lrt -pthread
+
 #ARM_CC = $(BBB_CC)
 #R_ADDR=$(RPI_ADDR)
 #R_PASS=$(RPI_PASS)
@@ -42,14 +44,14 @@ lin-client:
 	$(eval CC := gcc)
 	$(eval SOURCES += $(CLIENT_SOURCES))
 	$(eval SOURCES += unix_lib.c)
-	@$(MAKE) -f Makefile all EXECUTABLE=$(EXECUTABLE) CC=$(CC) SOURCES="$(SOURCES)"
+	@$(MAKE) -f Makefile all EXECUTABLE=$(EXECUTABLE) CC=$(CC) SOURCES="$(SOURCES)" LDFLAGS="$(LIN_LDFLAGS)"
 
 lin-server:
 	$(eval EXECUTABLE := server)
 	$(eval CC := gcc)
 	$(eval SOURCES += $(SERVER_SOURCES))
 	$(eval SOURCES += unix_lib.c)
-	@$(MAKE) -f Makefile all EXECUTABLE=$(EXECUTABLE) CC=$(CC) SOURCES="$(SOURCES)"
+	@$(MAKE) -f Makefile all EXECUTABLE=$(EXECUTABLE) CC=$(CC) SOURCES="$(SOURCES)" LDFLAGS="$(LIN_LDFLAGS)"
 
 win-client:
 	$(eval EXECUTABLE := client.exe)
@@ -71,7 +73,7 @@ arm-client:
 	$(eval EXECUTABLE := client-arm)
 	$(eval SOURCES += $(CLIENT_SOURCES))
 	$(eval SOURCES += unix_lib.c)
-	@$(MAKE) -f Makefile EXECUTABLE=$(EXECUTABLE) CC=$(ARM_CC) SOURCES="$(SOURCES)"
+	@$(MAKE) -f Makefile EXECUTABLE=$(EXECUTABLE) CC=$(ARM_CC) SOURCES="$(SOURCES)" LDFLAGS="$(LIN_LDFLAGS)"
 	sshpass -p $(R_PASS) scp $(BUILDDIR)/$(EXECUTABLE) $(R_ADDR)
 
 arm-server:
@@ -79,7 +81,7 @@ arm-server:
 	$(eval CC := arm-linux-gnueabihf-gcc)
 	$(eval SOURCES += $(SERVER_SOURCES))
 	$(eval SOURCES += unix_lib.c)
-	@$(MAKE) -f Makefile EXECUTABLE=$(EXECUTABLE) CC=$(ARM_CC) SOURCES="$(SOURCES)"
+	@$(MAKE) -f Makefile EXECUTABLE=$(EXECUTABLE) CC=$(ARM_CC) SOURCES="$(SOURCES)" LDFLAGS="$(LIN_LDFLAGS)"
 	sshpass -p $(R_PASS) scp $(BUILDDIR)/$(EXECUTABLE) $(R_ADDR)
 win:
 	make -f win_rules.mk

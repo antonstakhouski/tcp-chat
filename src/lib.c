@@ -59,3 +59,11 @@ void print_trans_results(long bytes_sent, time_t trans_time)
     printf("Transfer speed is: %f Mb/s \n",
             ((float)bytes_sent * 8 / trans_time) / (1000 * 1000));
 }
+
+void swap_buffers(char** buff1, char** buff2)
+{
+    char* p;
+    p = *buff1;
+    *buff1 = *buff2;
+    *buff2 = p;
+}

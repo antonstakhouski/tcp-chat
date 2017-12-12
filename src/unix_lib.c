@@ -50,3 +50,12 @@ void set_keepalive(int sockfd)
         exit(EXIT_FAILURE);
     }
 }
+
+void write_file(FILE* file, int nbytes, int offset, char* buffer) {
+    while(aio_error(&aiocb_) == EINPROGRESS);
+    aiocb_.aio_nbytes = nbytes;
+    aiocb_.aio_fildes = fileno(file);
+    aiocb_.aio_offset = offset;
+    aiocb_.aio_buf = buffer;
+    aio_write(&aiocb_);
+}

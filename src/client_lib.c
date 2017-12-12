@@ -33,14 +33,6 @@ void echo(int sockfd)
     printf("%s\n", buffer);
 }
 
-void swap_buffers(char** send_buff, char** read_buff)
-{
-    char* p;
-    p = *send_buff;
-    *send_buff= *read_buff;
-    *read_buff= p;
-}
-
 void udp_upload(char* filename, int sockfd, const struct sockaddr* server)
 {
     FILE* file;
