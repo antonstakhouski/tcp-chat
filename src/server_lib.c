@@ -66,7 +66,7 @@ int udp_upload(int newsockfd)
     fd_set readfds;
     struct timeval timeleft;
     long sec = 0;
-    long nsec = 50000;
+    long nsec = 300000;
     timeleft.tv_sec = sec;
     timeleft.tv_usec = nsec;
     int sel_res;
