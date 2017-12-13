@@ -212,7 +212,6 @@ void tcp_upload(char* filename, int sockfd)
     char buffer[TCP_MAX_LEN] = {0};
     unsigned int bytes_sent = 0;
     int res = 0;
-    unsigned int data_sent = 0;
 
     if(!(file = fopen(filename, "rb"))) {
         puts("error opening file");
@@ -245,6 +244,7 @@ void tcp_upload(char* filename, int sockfd)
 
     int oob_counter = 0;
     int oob_interval = 4000;
+    char procents;
     while (( size = fread(buffer, 1, TCP_MAX_LEN, file))) {
         if ((res = send(sockfd, buffer, size, 0)) < 0) {
             printf("Error %s\n", strerror(res));
@@ -252,12 +252,11 @@ void tcp_upload(char* filename, int sockfd)
         } else {
             /*printf("%d bytes sent\n", res);*/
             bytes_sent += res;
-            data_sent += res;
         }
         memset(buffer, 0, TCP_MAX_LEN);
 
-        char procents = ((data_sent * 100) / filesize) % 10;
         if (oob_counter > oob_interval) {
+            procents = ((int64_t)bytes_sent * 100) / filesize;
             if ((res = send(sockfd, (char*)&procents, sizeof(procents), MSG_OOB)) < 0) {
                 printf("Error %s\n", strerror(res));
                 return;

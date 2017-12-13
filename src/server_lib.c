@@ -262,7 +262,7 @@ int tcp_upload(int newsockfd)
                     return -1;
                 }
                 else{
-                    printf("OOB data: %d\n", *((int *)buffer));
+                    printf("File %s downloaded: %d\n", filename,  *((char*)buffer));
                 }
             } else if (!FD_ISSET(newsockfd, &set)) {
                 printf("Transfer error\n");
@@ -282,7 +282,6 @@ int tcp_upload(int newsockfd)
         }
     }
     fclose(out_file);
-    // TODO add lost packets statistics
     time_t trans_time = time(NULL) - start_transfer;
     puts("File received");
     print_trans_results(bytes_received, trans_time);
