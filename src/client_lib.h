@@ -14,7 +14,5 @@ void show_tcp_help();
 void tcp_loop(int sockfd);
 void udp_loop(int sockfd, struct sockaddr_in serv_addr);
 void swap_buffers(char** send_buff, char** read_buff);
-void fill_sets(int* client_socket, fd_set* readfds, fd_set* errorfds, int* max_sd);
-void process_requests(int* client_socket, fd_set* readfds, fd_set* errorfds);
 
 #endif //H_CLIENT_LIB

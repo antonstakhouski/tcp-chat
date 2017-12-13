@@ -90,7 +90,7 @@ void udp_upload(char* filename, int sockfd, const struct sockaddr* server)
     time_t start_transfer = time(NULL);
     time_t trans_time;
     size_t size = 1;
-    
+
     int first_sn = 0;
     int lost = 0;
 
@@ -154,7 +154,7 @@ void udp_upload(char* filename, int sockfd, const struct sockaddr* server)
         }
 
         // wait ACK
-        int new_sn = *((int*)read_buff); 
+        int new_sn = *((int*)read_buff);
         while (an < new_sn - 1) {
             memset(rx_buffer, 0, HEADER_LEN);
 
@@ -180,7 +180,7 @@ void udp_upload(char* filename, int sockfd, const struct sockaddr* server)
                 }
             } else {
                 lost = 0;
-                
+
                 if (rx_flags & 1) {
                     /*puts("FIN received");*/
                     memset(send_buff, 0, BUFFER_LEN);
@@ -230,7 +230,6 @@ void tcp_upload(char* filename, int sockfd)
     int char_end = strlen(buffer);
     memcpy(buffer + char_end, &filesize, sizeof(filesize));
     printf("Filesize: %" PRId64 "\n", filesize);
-    printf("Filesize takes %zu bytes\n", sizeof(filesize));
 
     time_t start_transfer = time(NULL);
     if ((res = send(sockfd, buffer, char_end + sizeof(filesize), 0)) < 0) {

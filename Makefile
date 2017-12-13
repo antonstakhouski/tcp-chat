@@ -14,7 +14,7 @@ OBJECTS = $(patsubst %.c,$(BUILDDIR)/%.o,$(SOURCES))
 EXECUTABLE ?= lin-client
 
 BBB_ADDR="debian@192.168.0.105:~/"
-RPI_ADDR="pi@192.168.12.213:~/"
+RPI_ADDR="pi@192.168.0.102:~/"
 
 BBB_PASS="temppwd"
 RPI_PASS="raspberry"

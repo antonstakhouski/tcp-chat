@@ -94,7 +94,7 @@ int udp_upload(int newsockfd)
                 lost = 1;
                 break;
             } else {
-                if (FD_ISSET(newsockfd, &readfds)){ 
+                if (FD_ISSET(newsockfd, &readfds)){
                     FD_CLR(newsockfd, &readfds);
                     memset(buffer, 0, UDP_MAX_LEN);
                     if ((n = recvfrom(newsockfd, buffer, UDP_MAX_LEN, 0, (struct sockaddr*)&from, &fromlen)) < 0) {
@@ -153,13 +153,13 @@ int udp_upload(int newsockfd)
             }
             an = temp_an + 1;
         }
-        
+
 
         if (an == sn_array[BUFF_ELEMENTS - 1] + 1) {
             lost = 0;
         }
         /*printf("\n");*/
-        
+
 
         // write data to file
         if ((!(an - buff_elements - first_an) && !lost ) || (rx_flags & 1)) {
@@ -169,7 +169,7 @@ int udp_upload(int newsockfd)
                 filesize -= fwrite(rx_buffer, 1, bytes_to_write, out_file);
                 bytes_received += bytes_to_write;
             }
-        } 
+        }
 
         if (rx_flags & 1) {
             tx_flags |= 1;
@@ -186,7 +186,7 @@ int udp_upload(int newsockfd)
         if ((tx_flags & 1) && !(rx_flags & 1)) {
             goto END_SERVER_UDP_TRANSFER;
         }
-        
+
         // send ACK
         /*printf("AN: %d\n", an);*/
         memcpy(tx_buffer, &an, sizeof(an));
@@ -204,87 +204,100 @@ END_SERVER_UDP_TRANSFER:
     return 0;
 }
 
-int tcp_upload(int newsockfd)
+int receive_header(struct client_entry* client)
 {
     char buffer[TCP_MAX_LEN] = {0};
     int n;
     char filename[256] = {0};
     char* size_pos;
-    FILE* out_file;
-    int64_t filesize;
     size_t filename_len;
-    long bytes_received = 0;
 
-    // if we get no info after command
-    time_t start_transfer = time(NULL);
-    if ((n = recv(newsockfd, buffer, TCP_MAX_LEN, 0)) < 0) {
+    client->start_transfer = time(NULL);
+    if ((n = recv(client->sockfd, buffer, TCP_MAX_LEN, 0)) < 0) {
         printf("Error: %s in line %d\n", strerror(n), __LINE__);
         return -1;
     }
+
     size_pos = strstr(buffer, "\n");
     filename_len = size_pos - buffer;
     printf("Filename len: %zu\n", filename_len);
     strncat(filename, buffer, filename_len);
     printf("Filename: %s\n", filename);
-    printf("Packet length: %d\n", n);
-    out_file = fopen(filename, "wb");
     size_pos++;
-    printf("Filesize takes %zu bytes\n", sizeof(filesize));
 
-    filesize = *((long*)size_pos);
-    printf("Filesize: %" PRId64 "\n", filesize);
-    size_t predata = size_pos + sizeof(filesize) - buffer;
-    filesize -= fwrite(size_pos + sizeof(filesize), 1, n - predata, out_file);
-    bytes_received += n - predata;
+    client->file = fopen(filename, "wb");
 
-    fd_set set, set_error;
-    struct timeval timeleft;
-    long sec = 30;
-    long nsec = 0;
-    timeleft.tv_sec = sec;
-    timeleft.tv_usec = nsec;
+    client->filesize = *((long*)size_pos);
+    printf("Filesize: %" PRId64 "\n", client->filesize);
+    size_t predata = size_pos + sizeof(client->filesize) - buffer;
+    client->filesize -= fwrite(size_pos + sizeof(client->filesize), 1, n - predata, client->file);
+    client->bytes_received = n - predata;
+    return 0;
+}
 
-    int sel_res;
+int receive_file_chunk(struct client_entry* client, fd_set* readfds, fd_set* errorfds)
+{
+    char buffer[TCP_MAX_LEN] = {0};
+
+    int n;
     // read from socket to file
-    while (filesize > 0) {
-        FD_SET(newsockfd, &set);
-        FD_SET(newsockfd, &set_error);
-        if ((sel_res = select(newsockfd + 1, &set, NULL, &set_error, &timeleft)) < 0) {
-            printf("Error: %s in line %d\n", strerror(n), __LINE__);
-        } else if (!sel_res) {
-            printf("Timeout occurred!\n");
-            break;
-        } else {
-            if (FD_ISSET(newsockfd, &set_error)) {
-                memset(buffer, 0, TCP_MAX_LEN);
-                if ((n = recv(newsockfd, buffer, TCP_MAX_LEN, MSG_OOB)) < 0) {
-                    printf("Error: %s in line %d\n", strerror(n), __LINE__);
-                    return -1;
-                }
-                else{
-                    printf("File %s downloaded: %d\n", filename,  *((char*)buffer));
-                }
-            } else if (!FD_ISSET(newsockfd, &set)) {
-                printf("Transfer error\n");
-                close_sock(newsockfd);
-                fclose(out_file);
-                return -1;
-            }
-
+    if (client->filesize > 0) {
+        if (FD_ISSET(client->sockfd, errorfds)) {
             memset(buffer, 0, TCP_MAX_LEN);
-            if ((n = recv(newsockfd, buffer, TCP_MAX_LEN, 0)) < 0) {
+            if ((n = recv(client->sockfd, buffer, TCP_MAX_LEN, MSG_OOB)) < 0) {
                 printf("Error: %s in line %d\n", strerror(n), __LINE__);
                 return -1;
             }
-            /*printf("Packet length: %d\n", n);*/
-            bytes_received += n;
-            filesize -= fwrite(buffer, 1, n, out_file);
+            else{
+                printf("Socket %d file downloaded: %d\n", client->sockfd, *((char*)buffer));
+            }
         }
+
+        if (FD_ISSET(client->sockfd, readfds)) {
+            memset(buffer, 0, TCP_MAX_LEN);
+            if ((n = recv(client->sockfd, buffer, TCP_MAX_LEN, 0)) < 0) {
+                printf("Error: %s in line %d\n", strerror(n), __LINE__);
+                return -1;
+            }
+            client->bytes_received += n;
+            client->filesize -= fwrite(buffer, 1, n, client->file);
+            if(!client->filesize) {
+                close_file(client);
+            }
+        } else {
+            printf("Transfer error\n");
+            remove_client(client);
+            fclose(client->file);
+            return -1;
+        }
+    } else {
+        close_file(client);
     }
-    fclose(out_file);
-    time_t trans_time = time(NULL) - start_transfer;
+    return 0;
+}
+
+void close_file(struct client_entry* client)
+{
+    fclose(client->file);
+    time_t trans_time = time(NULL) - client->start_transfer;
     puts("File received");
-    print_trans_results(bytes_received, trans_time);
+    print_trans_results(client->bytes_received, trans_time);
+    client->bytes_received = 0;
+    client->file = NULL;
+    client->start_transfer = 0;
+    client->filesize = 0;
+}
+
+int tcp_upload(struct client_entry* client, fd_set* readfds, fd_set* errorfds)
+{
+    if (!client->file) {
+        if (receive_header(client)) {
+            return -1;
+        }
+    } else {
+        receive_file_chunk(client, readfds, errorfds);
+    }
+
     return 0;
 }
 
@@ -323,13 +336,13 @@ void udp_loop(int sockfd)
     }
 }
 
-void fill_sets(int* client_socket, fd_set* readfds, fd_set* errorfds, int* max_sd)
+void fill_sets(struct client_entry* clients, fd_set* readfds, fd_set* errorfds, int* max_sd)
 {
     //add child sockets to set
-    for (int i = 0 ; i < MAX_OPEN_SOCKS; i++) 
+    for (int i = 0 ; i < MAX_OPEN_SOCKS; i++)
     {
         //socket descriptor
-        int sd = client_socket[i];
+        int sd = clients[i].sockfd;
 
         //if valid socket descriptor then add to read list
         if(sd > 0) {
@@ -343,35 +356,57 @@ void fill_sets(int* client_socket, fd_set* readfds, fd_set* errorfds, int* max_s
     }
 }
 
-void process_requests(int* client_socket, fd_set* readfds, fd_set* errorfds)
+void process_requests(struct client_entry* clients, fd_set* readfds, fd_set* errorfds)
 {
     int n;
     char buffer[TCP_MAX_LEN];
-    for (int i = 0; i < MAX_OPEN_SOCKS; i++) 
+    for (int i = 0; i < MAX_OPEN_SOCKS; i++)
     {
-        int sd = client_socket[i];
-        if (FD_ISSET(sd , readfds)) 
+        if (FD_ISSET(clients[i].sockfd, readfds) || FD_ISSET(clients[i].sockfd, errorfds))
         {
-            memset(buffer, 0, TCP_MAX_LEN);
-            if ((n = recv(sd, buffer, TCP_MAX_LEN, 0)) > 0) {
-                if (!strncmp(buffer, CLOSE_STR, strlen(CLOSE_STR))) {
-                    if (close_sock(sd) < 0)
-                        break;
-                    break;
+            // if client is sending file
+            if (clients[i].file) {
+                if(receive_file_chunk(&clients[i], readfds, errorfds)) {
+                    remove_client(&clients[i]);
                 }
-                if (!strncmp(buffer, ECHO_STR, strlen(ECHO_STR)))
-                    if (echo(strstr(buffer, "\n") + 1, sd) < 0)
-                        break;
-                if (!strncmp(buffer, UPLOAD_STR, strlen(UPLOAD_STR))) {
-                    if(tcp_upload(sd) < 0)
-                        break;
-                }
-                if (!strncmp(buffer, TIME_STR, strlen(TIME_STR)))
-                    if (send_time(sd) < 0 )
-                        break;
+                break;
             }
+
+            memset(buffer, 0, TCP_MAX_LEN);
+            if ((n = recv(clients[i].sockfd, buffer, TCP_MAX_LEN, 0)) > 0) {
+                if (!strncmp(buffer, CLOSE_STR, strlen(CLOSE_STR))) {
+                    remove_client(&clients[i]);
+                }
+                if (!strncmp(buffer, ECHO_STR, strlen(ECHO_STR))) {
+                    if (echo(strstr(buffer, "\n") + 1, clients[i].sockfd) < 0) {
+                        remove_client(&clients[i]);
+                    }
+                }
+                if (!strncmp(buffer, UPLOAD_STR, strlen(UPLOAD_STR))) {
+                    if(tcp_upload(&clients[i], readfds, errorfds) < 0) {
+                        remove_client(&clients[i]);
+                    }
+                }
+                if (!strncmp(buffer, TIME_STR, strlen(TIME_STR))) {
+                    if (send_time(clients[i].sockfd) < 0 ) {
+                        remove_client(&clients[i]);
+                    }
+                }
+            }
+
         }
     }
+}
+
+void remove_client(struct client_entry* client) {
+    close_sock(client->sockfd);
+    client->sockfd = 0;
+    if (client->file)
+        fclose(client->file);
+    client->file = NULL;
+    client->filesize = 0;
+    client->start_transfer = 0;
+    client->bytes_received = 0;
 }
 
 void tcp_loop(int master_socket)
@@ -379,7 +414,7 @@ void tcp_loop(int master_socket)
     //listen
     listen(master_socket, 5);
     int max_sd;
-    int client_socket[MAX_OPEN_SOCKS] = {0};
+    struct client_entry clients[MAX_OPEN_SOCKS] = {{0}};
     fd_set readfds, errorfds;
 
     puts("Server is ready");
@@ -388,33 +423,33 @@ void tcp_loop(int master_socket)
         //clear the socket set
         FD_ZERO(&readfds);
         FD_ZERO(&errorfds);
-        
+
         //add master socket to set
         FD_SET(master_socket, &readfds);
         max_sd = master_socket;
-        
-        fill_sets(client_socket, &readfds, &errorfds, &max_sd); 
+
+        fill_sets(clients, &readfds, &errorfds, &max_sd);
 
         //wait for an activity on one of the sockets , timeout is NULL , so wait indefinitely
         int activity = select( max_sd + 1 , &readfds , NULL, &errorfds, NULL);
 
-        if ((activity < 0) && (errno!=EINTR)) 
+        if ((activity < 0) && (errno!=EINTR))
         {
             printf("select error");
         }
-        
+
         //If something happened on the master socket , then its an incoming connection
-        if (FD_ISSET(master_socket, &readfds)) 
-            receive_connection(master_socket, client_socket);
-        
+        if (FD_ISSET(master_socket, &readfds))
+            receive_connection(master_socket, clients);
+
         //else its some IO operation on some other socket :)
-        process_requests(client_socket, &readfds, &errorfds);
+        process_requests(clients, &readfds, &errorfds);
 
     }
     close_sock(master_socket);
 }
 
-void receive_connection(int master_socket, int* client_socket)
+void receive_connection(int master_socket, struct client_entry* clients)
 {
     int new_socket;
     struct sockaddr_in cli_addr;
@@ -432,12 +467,16 @@ void receive_connection(int master_socket, int* client_socket)
             new_socket , inet_ntoa(cli_addr.sin_addr) , ntohs(cli_addr.sin_port));
 
     //add new socket to array of sockets
-    for (int i = 0; i < MAX_OPEN_SOCKS; i++) 
+    for (int i = 0; i < MAX_OPEN_SOCKS; i++)
     {
         //if position is empty
-        if( client_socket[i] == 0 )
+        if(!clients[i].sockfd)
         {
-            client_socket[i] = new_socket;
+            clients[i].sockfd = new_socket;
+            clients[i].file = NULL;
+            clients[i].filesize = 0;
+            clients[i].start_transfer = 0;
+            clients[i].bytes_received = 0;
             printf("Adding to list of sockets as %d\n" , i);
             break;
         }
