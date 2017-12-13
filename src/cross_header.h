@@ -31,6 +31,8 @@ typedef unsigned int socketlen;
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/select.h>
+#include <arpa/inet.h>
+
 #define PLATFORM PLATFORM_UNIX
 
 #define h_addr h_addr_list[0] /* for backward compatibility */

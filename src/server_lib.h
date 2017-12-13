@@ -3,6 +3,8 @@
 
 #include "cross_header.h"
 
+#define MAX_OPEN_SOCKS 30
+
 int echo(char* buff, int newsockfd);
 int udp_upload(int newsockfd);
 int tcp_upload(int newsockfd);
