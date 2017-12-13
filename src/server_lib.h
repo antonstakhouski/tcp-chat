@@ -11,5 +11,6 @@ int tcp_upload(int newsockfd);
 int send_time(int newsockfd);
 void udp_loop(int sockfd);
 void tcp_loop(int sockfd);
+void receive_connection(int master_socket, int* client_socket);
 
 #endif //H_SERVER_LIB

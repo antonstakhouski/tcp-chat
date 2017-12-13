@@ -323,109 +323,123 @@ void udp_loop(int sockfd)
     }
 }
 
+void fill_sets(int* client_socket, fd_set* readfds, fd_set* errorfds, int* max_sd)
+{
+    //add child sockets to set
+    for (int i = 0 ; i < MAX_OPEN_SOCKS; i++) 
+    {
+        //socket descriptor
+        int sd = client_socket[i];
+
+        //if valid socket descriptor then add to read list
+        if(sd > 0) {
+            FD_SET(sd , readfds);
+            FD_SET(sd , errorfds);
+        }
+
+        //highest file descriptor number, need it for the select function
+        if(sd > *max_sd)
+            *max_sd = sd;
+    }
+}
+
+void process_requests(int* client_socket, fd_set* readfds, fd_set* errorfds)
+{
+    int n;
+    char buffer[TCP_MAX_LEN];
+    for (int i = 0; i < MAX_OPEN_SOCKS; i++) 
+    {
+        int sd = client_socket[i];
+        if (FD_ISSET(sd , readfds)) 
+        {
+            memset(buffer, 0, TCP_MAX_LEN);
+            if ((n = recv(sd, buffer, TCP_MAX_LEN, 0)) > 0) {
+                if (!strncmp(buffer, CLOSE_STR, strlen(CLOSE_STR))) {
+                    if (close_sock(sd) < 0)
+                        break;
+                    break;
+                }
+                if (!strncmp(buffer, ECHO_STR, strlen(ECHO_STR)))
+                    if (echo(strstr(buffer, "\n") + 1, sd) < 0)
+                        break;
+                if (!strncmp(buffer, UPLOAD_STR, strlen(UPLOAD_STR))) {
+                    if(tcp_upload(sd) < 0)
+                        break;
+                }
+                if (!strncmp(buffer, TIME_STR, strlen(TIME_STR)))
+                    if (send_time(sd) < 0 )
+                        break;
+            }
+        }
+    }
+}
+
 void tcp_loop(int master_socket)
 {
-    char buffer[TCP_MAX_LEN];
-    struct sockaddr_in cli_addr;
-    socketlen clilen;
-
     //listen
     listen(master_socket, 5);
-    clilen = sizeof(cli_addr);
-    int n, max_sd;
+    int max_sd;
     int client_socket[MAX_OPEN_SOCKS] = {0};
-    fd_set readfds, writefds, errorfds;
+    fd_set readfds, errorfds;
 
     puts("Server is ready");
 
     while (1) {
         //clear the socket set
         FD_ZERO(&readfds);
-        //
+        FD_ZERO(&errorfds);
+        
         //add master socket to set
         FD_SET(master_socket, &readfds);
         max_sd = master_socket;
         
-        //add child sockets to set
-        for (int i = 0 ; i < MAX_OPEN_SOCKS; i++) 
-        {
-            //socket descriptor
-            int sd = client_socket[i];
+        fill_sets(client_socket, &readfds, &errorfds, &max_sd); 
 
-            //if valid socket descriptor then add to read list
-            if(sd > 0)
-                FD_SET(sd , &readfds);
-
-            //highest file descriptor number, need it for the select function
-            if(sd > max_sd)
-                max_sd = sd;
-        }
-        
         //wait for an activity on one of the sockets , timeout is NULL , so wait indefinitely
-        int activity = select( max_sd + 1 , &readfds , &writefds, &errorfds, NULL);
+        int activity = select( max_sd + 1 , &readfds , NULL, &errorfds, NULL);
 
         if ((activity < 0) && (errno!=EINTR)) 
         {
             printf("select error");
         }
-        //
+        
         //If something happened on the master socket , then its an incoming connection
         if (FD_ISSET(master_socket, &readfds)) 
-        {
-            int new_socket;
-            if ((new_socket = accept(master_socket, (struct sockaddr *)&cli_addr, (socklen_t*)&clilen))<0)
-            {
-                perror("accept");
-                exit(EXIT_FAILURE);
-            }
-
-            //inform user of socket number - used in send and receive commands
-            printf("New connection , socket fd is %d , ip is : %s , port : %d \n" ,
-                    new_socket , inet_ntoa(cli_addr.sin_addr) , ntohs(cli_addr.sin_port));
-
-            //add new socket to array of sockets
-            for (int i = 0; i < MAX_OPEN_SOCKS; i++) 
-            {
-                //if position is empty
-                if( client_socket[i] == 0 )
-                {
-                    client_socket[i] = new_socket;
-                    printf("Adding to list of sockets as %d\n" , i);
-                    break;
-                }
-            }
-        }
+            receive_connection(master_socket, client_socket);
         
         //else its some IO operation on some other socket :)
-        for (int i = 0; i < MAX_OPEN_SOCKS; i++) 
-        {
-            int sd = client_socket[i];
-
-            if (FD_ISSET( sd , &readfds)) 
-            {
-                memset(buffer, 0, TCP_MAX_LEN);
-                if ((n = recv(sd, buffer, TCP_MAX_LEN, 0)) > 0) {
-                    if (n < 0)
-                        break;
-                    if (!strncmp(buffer, CLOSE_STR, strlen(CLOSE_STR))) {
-                        if (close_sock(sd) < 0)
-                            break;
-                        break;
-                    }
-                    if (!strncmp(buffer, ECHO_STR, strlen(ECHO_STR)))
-                        if (echo(strstr(buffer, "\n") + 1, sd) < 0)
-                            break;
-                    if (!strncmp(buffer, UPLOAD_STR, strlen(UPLOAD_STR))) {
-                        if(tcp_upload(sd) < 0)
-                            break;
-                    }
-                    if (!strncmp(buffer, TIME_STR, strlen(TIME_STR)))
-                        if (send_time(sd) < 0 )
-                            break;
-                }
-            }
-        }
+        process_requests(client_socket, &readfds, &errorfds);
 
     }
     close_sock(master_socket);
+}
+
+void receive_connection(int master_socket, int* client_socket)
+{
+    int new_socket;
+    struct sockaddr_in cli_addr;
+    socketlen clilen;
+    clilen = sizeof(cli_addr);
+
+    if ((new_socket = accept(master_socket, (struct sockaddr *)&cli_addr, (socklen_t*)&clilen))<0)
+    {
+        perror("accept");
+        exit(EXIT_FAILURE);
+    }
+
+    //inform user of socket number - used in send and receive commands
+    printf("New connection , socket fd is %d , ip is : %s , port : %d \n" ,
+            new_socket , inet_ntoa(cli_addr.sin_addr) , ntohs(cli_addr.sin_port));
+
+    //add new socket to array of sockets
+    for (int i = 0; i < MAX_OPEN_SOCKS; i++) 
+    {
+        //if position is empty
+        if( client_socket[i] == 0 )
+        {
+            client_socket[i] = new_socket;
+            printf("Adding to list of sockets as %d\n" , i);
+            break;
+        }
+    }
 }
