@@ -66,11 +66,11 @@ void udp_upload(char* filename, int sockfd, const struct sockaddr* server)
     strcat(tx_buffer1, "\n");
 
     fseek(file, 0L, SEEK_END);
-    long filesize = ftell(file);
+    int64_t filesize = ftell(file);
     rewind(file);
     int char_end = strlen(tx_buffer1);
     memcpy(tx_buffer1 + char_end, &filesize, sizeof(filesize));
-    printf("Filesize: %ld\n", filesize);
+    printf("Filesize: %" PRId64 "\n", filesize);
 
     if ((res = sendto(sockfd, tx_buffer1, char_end + sizeof(filesize), 0,
                     server, length)) < 0) {
@@ -167,7 +167,7 @@ void udp_upload(char* filename, int sockfd, const struct sockaddr* server)
             /*printf("AN: %d\n", an);*/
 
             // SOME packets lost
-            if (an < new_sn - 1) {
+            if ( !(rx_flags & 1) && (an < new_sn - 1)) {
                 bytes_lost += res;
                 printf("Packet %d lost\n", an);
                 lost = 1;

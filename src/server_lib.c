@@ -1,5 +1,10 @@
 #include "server_lib.h"
 
+//TODO
+//fix Windows build
+//fix filename bug
+//test write to one file
+
 int echo(char* buff, int newsockfd)
 {
     char buffer[TCP_MAX_LEN] = {0};
@@ -15,21 +20,181 @@ int echo(char* buff, int newsockfd)
     return 0;
 }
 
+int receive_udp_packet(int newsockfd, struct udp_info* udp_info_)
+{
+    int n;
+    int sn;
+    char buffer[UDP_MAX_LEN] = {0};
+    socketlen fromlen = sizeof(struct sockaddr_in);
+    struct sockaddr_in from;
+
+    memset(buffer, 0, UDP_MAX_LEN);
+    if ((n = recvfrom(newsockfd, buffer, UDP_MAX_LEN, 0, (struct sockaddr*)&from, &fromlen)) < 0) {
+        printf("Error: %s", strerror(n));
+        return -1;
+    } else if (!n) {
+        return 0;
+    }
+    sn = *((int*)buffer);
+    if (sn < udp_info_->first_an)
+        return 0;
+    udp_info_->rx_flags = *((unsigned char*)(buffer + sizeof(sn)));
+    /*printf("SN: %d\n", sn);*/
+
+    // terminate connection
+
+    if (udp_info_->tx_flags & 1) {
+        puts("tx_set");
+        return 1;
+    }
+
+    memcpy(udp_info_->rx_buffer + (sn - udp_info_->first_an) * (UDP_MAX_LEN - HEADER_LEN),
+            buffer + HEADER_LEN, UDP_MAX_LEN - HEADER_LEN);
+    udp_info_->sn_array[sn - udp_info_->first_an] = sn;
+    udp_info_->buff_elements++;
+
+    if ((udp_info_->rx_flags) & 1) {
+        puts("FIN received");
+        return 1;
+    }
+
+    return 0;
+}
+
+int receive_udp_chunk(int newsockfd, struct udp_info* udp_info_)
+{
+    fd_set readfds;
+    struct timeval timeleft;
+    long sec = 0;
+    long nsec = 300000;
+    timeleft.tv_sec = sec;
+    timeleft.tv_usec = nsec;
+    int sel_res;
+
+    // read incloming packets
+    if (!(udp_info_->lost)) {
+        memset(udp_info_->rx_buffer, 0, BUFF_ELEMENTS * (UDP_MAX_LEN - HEADER_LEN));
+        udp_info_->first_an = udp_info_->an;
+        udp_info_->buff_elements = 0;
+        memset(udp_info_->sn_array, -1, BUFF_ELEMENTS * sizeof(udp_info_->sn_array[0]));
+    } else{
+        udp_info_->buff_elements = udp_info_->an - udp_info_->first_an;
+    }
+
+    while (udp_info_->buff_elements < BUFF_ELEMENTS) {
+        FD_SET(newsockfd, &readfds);
+        timeleft.tv_sec = sec;
+        timeleft.tv_usec = nsec;
+        if ((sel_res = select( newsockfd + 1, &readfds, NULL, NULL, &timeleft)) < 0) {
+            printf("Error: %s in line %d\n", strerror(sel_res), __LINE__);
+        } else if (!sel_res) {
+            printf("Timeout occurred!\n");
+            udp_info_->lost = 1;
+            break;
+        } else {
+            if (FD_ISSET(newsockfd, &readfds)){
+                FD_CLR(newsockfd, &readfds);
+                if(receive_udp_packet(newsockfd, udp_info_))
+                    return 1;
+            }
+        }
+    }
+    return 0;
+}
+
+int set_an(struct udp_info* udp_info_)
+{
+    int lost;
+    int valid;
+    int temp_an = -1;
+    for (valid = 0; valid < BUFF_ELEMENTS; valid++) {
+        /*printf("%d ", sn_array[valid]);*/
+        if (udp_info_->sn_array[valid] > -1) {
+            temp_an = udp_info_->sn_array[valid];
+            break;
+        }
+    }
+    if (temp_an > udp_info_->first_an)
+        temp_an = -1;
+    if (temp_an > -1) {
+        for (int i = valid; i < BUFF_ELEMENTS - 1; i++) {
+            if (temp_an + 1 == udp_info_->sn_array[i + 1]) {
+                temp_an++;
+            } else {
+                lost = 1;
+            }
+            /*printf("%d ", sn_array[i + 1]);*/
+        }
+        udp_info_->an = temp_an + 1;
+    }
+
+
+    if (udp_info_->an == udp_info_->sn_array[BUFF_ELEMENTS - 1] + 1) {
+        lost = 0;
+    }
+    /*printf("\n");*/
+
+    return lost;
+}
+
+int write_to_file_udp(struct udp_info* udp_info_, FILE* out_file)
+{
+    int64_t bytes_to_write;
+    // write data to file
+    if ((!(udp_info_->an - udp_info_->buff_elements - udp_info_->first_an) && !(udp_info_->lost ))
+        || (udp_info_->rx_flags & 1)) {
+        /*printf("All packets received\n");*/
+        if (udp_info_->filesize > 0) {
+            bytes_to_write = MIN((int64_t)(UDP_MAX_LEN - HEADER_LEN) * udp_info_->buff_elements,
+                    udp_info_->filesize);
+            udp_info_->filesize -= fwrite(udp_info_->rx_buffer, 1, bytes_to_write, out_file);
+            udp_info_->bytes_received += bytes_to_write;
+        }
+    }
+    return 0;
+}
+
+int udp_transfer_loop(int newsockfd, struct udp_info* udp_info_, FILE* out_file, struct sockaddr_in* from)
+{
+    int ack_size;
+    socketlen fromlen = sizeof(struct sockaddr_in);
+    while (1) {
+        receive_udp_chunk(newsockfd, udp_info_);
+        set_an(udp_info_);
+        write_to_file_udp(udp_info_, out_file);
+
+        if (udp_info_->rx_flags & 1) {
+            udp_info_->tx_flags |= 1;
+            udp_info_->first_an = udp_info_->an;
+        }
+
+        if ((udp_info_->tx_flags & 1) && !(udp_info_->rx_flags & 1)) {
+            puts("break");
+            break;
+        }
+
+        // send ACK
+        /*printf("AN: %d\n", an);*/
+        memcpy(udp_info_->tx_buffer, &(udp_info_->an), sizeof(udp_info_->an));
+        memcpy(udp_info_->tx_buffer + sizeof(udp_info_->an), &(udp_info_->tx_flags), sizeof(udp_info_->tx_flags));
+        ack_size  = sendto(newsockfd, udp_info_->tx_buffer, HEADER_LEN, 0, (struct sockaddr *)from, fromlen);
+        if (ack_size < 0) error("sendto");
+
+    }
+    return 0;
+}
+
 int udp_upload(int newsockfd)
 {
-    char rx_buffer[BUFF_ELEMENTS * (UDP_MAX_LEN - HEADER_LEN)] = {0};
+    struct udp_info udp_info_ = {0};
     char buffer[UDP_MAX_LEN] = {0};
-    char tx_buffer[HEADER_LEN] = {0};
     int n;
     char filename[256] = {0};
     char* size_pos;
     FILE* out_file;
-    long filesize;
     size_t filename_len;
-    int bytes_received = 0;
     socketlen fromlen = sizeof(struct sockaddr_in);
     struct sockaddr_in from;
-
 
     // if we get no info after command
     if ((n = recvfrom(newsockfd, buffer, UDP_MAX_LEN, 0,
@@ -44,162 +209,25 @@ int udp_upload(int newsockfd)
     out_file = fopen(filename, "wb");
     size_pos++;
 
-    filesize= *((long*)size_pos);
-    printf("Filesize: %ld\n", filesize);
+    udp_info_.filesize= *((int64_t*)size_pos);
+    printf("Filesize: %" PRId64 "\n", udp_info_.filesize);
     printf("%d bytes received\n", n);
-    size_t predata = size_pos + sizeof(filesize) - buffer;
-    filesize -= fwrite(size_pos + sizeof(filesize), 1, n - predata, out_file);
-
-    int sn = -1;
-    int an = 0;
-    int ack_size;
-    int bytes_to_write;
-    unsigned char tx_flags = 0;
-    unsigned char rx_flags = 0;
+    size_t predata = size_pos + sizeof(udp_info_.filesize) - buffer;
+    udp_info_.filesize -= fwrite(size_pos + sizeof(udp_info_.filesize), 1, n - predata, out_file);
 
     time_t start_transfer = time(NULL);
     time_t trans_time;
-    int buff_elements = 0;
-    int first_an = 0;
 
-    int sn_array[BUFF_ELEMENTS] = {-1};
-    fd_set readfds;
-    struct timeval timeleft;
-    long sec = 0;
-    long nsec = 300000;
-    timeleft.tv_sec = sec;
-    timeleft.tv_usec = nsec;
-    int sel_res;
-    int lost = 0;
+    memset(udp_info_.sn_array, -1, BUFF_ELEMENTS * sizeof(udp_info_.sn_array[0]));
+    udp_info_.lost = 0;
+
+    udp_transfer_loop(newsockfd, &udp_info_, out_file, &from);
+
     // read from socket to file
-    while (1) {
-        // read incloming packets
-        if (!lost) {
-            memset(rx_buffer, 0, BUFF_ELEMENTS * (UDP_MAX_LEN - HEADER_LEN));
-            first_an =  an;
-            buff_elements = 0;
-            memset(sn_array, -1, BUFF_ELEMENTS * sizeof(sn_array[0]));
-        } else{
-            buff_elements = an - first_an;
-        }
-
-        while(buff_elements < BUFF_ELEMENTS) {
-            FD_SET(newsockfd, &readfds);
-            timeleft.tv_sec = sec;
-            timeleft.tv_usec = nsec;
-            if ((sel_res = select( newsockfd + 1, &readfds, NULL, NULL, &timeleft)) < 0) {
-                printf("Error: %s in line %d\n", strerror(n), __LINE__);
-            } else if (!sel_res) {
-                printf("Timeout occurred!\n");
-                lost = 1;
-                break;
-            } else {
-                if (FD_ISSET(newsockfd, &readfds)){
-                    FD_CLR(newsockfd, &readfds);
-                    memset(buffer, 0, UDP_MAX_LEN);
-                    if ((n = recvfrom(newsockfd, buffer, UDP_MAX_LEN, 0, (struct sockaddr*)&from, &fromlen)) < 0) {
-                        printf("Error: %s", strerror(n));
-                        return -1;
-                    } else if (!n) {
-                        break;
-                    }
-                    sn = *((int*)buffer);
-                    if (sn < first_an)
-                        break;
-                    rx_flags = *((unsigned char*)(buffer + sizeof(sn)));
-                    /*printf("SN: %d\n", sn);*/
-
-                    // terminate connection
-
-                    if (tx_flags & 1) {
-                        break;
-                    }
-
-                    memcpy(rx_buffer + (sn - first_an) * (UDP_MAX_LEN - HEADER_LEN),
-                            buffer + HEADER_LEN, UDP_MAX_LEN - HEADER_LEN);
-                    sn_array[sn - first_an] = sn;
-                    buff_elements++;
-
-                    if (rx_flags & 1) {
-                        /*puts("FIN received");*/
-                        break;
-                    }
-                }
-            }
-
-        }
-
-        // sort sn array
-        /*printf("sorting\n");*/
-        int valid;
-        int temp_an = -1;
-        for (valid = 0; valid < BUFF_ELEMENTS; valid++) {
-            /*printf("%d ", sn_array[valid]);*/
-            if (sn_array[valid] > -1) {
-                temp_an = sn_array[valid];
-                break;
-            }
-        }
-        if (temp_an > first_an)
-            temp_an = -1;
-        if (temp_an > -1) {
-            for (int i = valid; i < BUFF_ELEMENTS - 1; i++) {
-                if (temp_an + 1 == sn_array[i + 1]) {
-                    temp_an++;
-                } else {
-                    lost = 1;
-                }
-                /*printf("%d ", sn_array[i + 1]);*/
-            }
-            an = temp_an + 1;
-        }
-
-
-        if (an == sn_array[BUFF_ELEMENTS - 1] + 1) {
-            lost = 0;
-        }
-        /*printf("\n");*/
-
-
-        // write data to file
-        if ((!(an - buff_elements - first_an) && !lost ) || (rx_flags & 1)) {
-            /*printf("All packets received\n");*/
-            if (filesize > 0) {
-                bytes_to_write = MIN((UDP_MAX_LEN - HEADER_LEN) * buff_elements, filesize);
-                filesize -= fwrite(rx_buffer, 1, bytes_to_write, out_file);
-                bytes_received += bytes_to_write;
-            }
-        }
-
-        if (rx_flags & 1) {
-            tx_flags |= 1;
-            /*puts("FIN sent");*/
-            memcpy(tx_buffer, &an, sizeof(an));
-            memcpy(tx_buffer + sizeof(an), &tx_flags, sizeof(tx_flags));
-            ack_size  = sendto(newsockfd, tx_buffer, HEADER_LEN, 0, (struct sockaddr *)&from, fromlen);
-            if (ack_size < 0) error("recvfrom");
-            sn = -1;
-            first_an = an;
-            break;
-        }
-
-        if ((tx_flags & 1) && !(rx_flags & 1)) {
-            goto END_SERVER_UDP_TRANSFER;
-        }
-
-        // send ACK
-        /*printf("AN: %d\n", an);*/
-        memcpy(tx_buffer, &an, sizeof(an));
-        memcpy(tx_buffer + sizeof(an), &tx_flags, sizeof(tx_flags));
-        ack_size  = sendto(newsockfd, tx_buffer, HEADER_LEN, 0, (struct sockaddr *)&from, fromlen);
-        if (ack_size < 0) error("recvfrom");
-
-    }
-END_SERVER_UDP_TRANSFER:
     fclose(out_file);
     puts("File received");
     trans_time = time(NULL) - start_transfer;
-    print_trans_results(bytes_received, trans_time);
+    print_trans_results(udp_info_.bytes_received, trans_time);
     fflush(stdout);
     return 0;
 }
@@ -456,7 +484,7 @@ void receive_connection(int master_socket, struct client_entry* clients)
     socketlen clilen;
     clilen = sizeof(cli_addr);
 
-    if ((new_socket = accept(master_socket, (struct sockaddr *)&cli_addr, (socklen_t*)&clilen))<0)
+    if ((new_socket = accept(master_socket, (struct sockaddr *)&cli_addr, &clilen))<0)
     {
         perror("accept");
         exit(EXIT_FAILURE);
