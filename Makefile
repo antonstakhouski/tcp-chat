@@ -7,7 +7,7 @@ BUILDDIR = build
 
 SOURCES = lib.c
 CLIENT_SOURCES= client.c client_lib.c
-SERVER_SOURCES= server.c server_lib.c
+SERVER_SOURCES= server.c udp_server.c tcp_server.c
 
 OBJECTS = $(patsubst %.c,$(BUILDDIR)/%.o,$(SOURCES))
 
@@ -20,7 +20,6 @@ BBB_PASS="temppwd"
 RPI_PASS="raspberry"
 
 BBB_CC = arm-linux-gnueabihf-gcc
-RPI_CC = /bin/arm-bcm2708-linux-gnueabi/gcc
 
 #ARM_CC = $(BBB_CC)
 #R_ADDR=$(RPI_ADDR)

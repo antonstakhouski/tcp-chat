@@ -1,5 +1,6 @@
 #include "cross_header.h"
-#include "server_lib.h"
+#include "udp_server.h"
+#include "tcp_server.h"
 
 int main(int argc, char *argv[])
 {
