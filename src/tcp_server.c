@@ -1,9 +1,7 @@
 #include "tcp_server.h"
 
-//TODO
-//fix Windows build
-//fix filename bug
-//test write to one file
+volatile int busy_count;
+pthread_mutex_t lock;
 
 int echo(char* buff, int newsockfd)
 {
@@ -134,6 +132,11 @@ void tcp_io_loop(int sockfd)
                 (struct sockaddr *) &cli_addr,
                 &clilen);
 
+        pthread_mutex_lock(&lock);
+        busy_count++;
+        printf("Busy count: %d\n", busy_count);
+        pthread_mutex_unlock(&lock);
+
         while (1) {
             memset(buffer, 0, TCP_MAX_LEN);
             if ((n = recv(newsockfd, buffer, TCP_MAX_LEN, 0)) > 0) {
@@ -166,18 +169,21 @@ void tcp_loop(int master_socket)
     listen(master_socket, 5);
 
     puts("Server is ready");
+    int thread_count = 0;
 
-    volatile int thread_count = 0;
-
-    int Nmin = 3;
+    int Nmin = 1;
     int Nmax = 10;
 
     int create_res = 0;
+    busy_count = 0;
     struct thread_info*  tinfo;
     tinfo = calloc(Nmax, sizeof(struct thread_info));
 
+    assert(!pthread_mutex_init(&lock, NULL));
+
     for (int i = 0; i < Nmax; i++) {
         tinfo[i].master_socket = master_socket;
+        tinfo[i].thread_num = -1;
     }
 
     for (int i = 0; i < Nmin; i++) {
@@ -186,11 +192,34 @@ void tcp_loop(int master_socket)
         create_res = pthread_create(&tinfo[i].thread_id, NULL, &thread_start, &tinfo[i]);
         if (create_res != 0) {
             printf("create error\n");
+        } else {
+            thread_count++;
         }
+    }
+
+    while(1)
+    {
+        if (busy_count == thread_count && thread_count >= Nmin && thread_count < Nmax) {
+            for (int i = 0; i < Nmax; i++) {
+                if (tinfo[i].thread_num > -1) {
+                    tinfo[i].thread_num = i;
+
+                    create_res = pthread_create(&tinfo[i].thread_id, NULL, &thread_start, &tinfo[i]);
+                    if (create_res != 0) {
+                        printf("create error\n");
+                    } else {
+                        thread_count++;
+                    }
+                    break;
+                }
+            }
+        }
+        sleep(1);
     }
 
     while(1);
     close_sock(master_socket);
+    pthread_mutex_destroy(&lock);
 }
 
 static void* thread_start(void* arg)
