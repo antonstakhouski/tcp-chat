@@ -1,6 +1,10 @@
 #include "tcp_server.h"
 
+#define Nmin 1
+#define Nmax 3
+
 volatile int busy_count;
+volatile int thread_count;
 pthread_mutex_t lock;
 
 int echo(char* buff, int newsockfd)
@@ -123,7 +127,6 @@ void tcp_io_loop(int sockfd)
     while (1) {
         memset(buffer, 0, TCP_MAX_LEN);
         if ((n = recv(sockfd, buffer, TCP_MAX_LEN, 0)) > 0) {
-            printf("got it\n");
             if (!strncmp(buffer, CLOSE_STR, strlen(CLOSE_STR))) {
                 if (close_sock(sockfd) < 0)
                     break;
@@ -141,7 +144,6 @@ void tcp_io_loop(int sockfd)
                     break;
         }
     }
-    puts("Bye!");
     close_sock(sockfd);
 }
 
@@ -151,10 +153,7 @@ void tcp_loop(int master_socket)
     listen(master_socket, 5);
 
     puts("Server is ready");
-    int thread_count = 0;
-
-    int Nmin = 1;
-    int Nmax = 10;
+    thread_count = 0;
 
     int create_res = 0;
     busy_count = 0;
@@ -182,8 +181,8 @@ void tcp_loop(int master_socket)
     while(1)
     {
         if (busy_count == thread_count && thread_count >= Nmin && thread_count < Nmax) {
-            for (int i = 0; i < Nmax; i++) {
-                if (tinfo[i].thread_num > -1) {
+            for (int i = Nmin; i < Nmax; i++) {
+                if (tinfo[i].thread_num == -1) {
                     tinfo[i].thread_num = i;
 
                     create_res = pthread_create(&tinfo[i].thread_id, NULL, &thread_start, &tinfo[i]);
@@ -205,29 +204,68 @@ void tcp_loop(int master_socket)
 
 void* thread_start(void* arg)
 {
-    struct thread_info *tinfo= arg;
+    struct thread_info *tinfo = arg;
 
     int new_socket;
     struct sockaddr_in cli_addr;
     socketlen clilen;
     clilen = sizeof(cli_addr);
+    int sel_res;
+    fd_set readfds;
+    struct timeval timeleft;
+    long sec = 5;
+    long nsec = 0;
+    timeleft.tv_sec = sec;
+    timeleft.tv_usec = nsec;
+    FD_SET(tinfo->master_socket, &readfds);
+    int has_client = 0;
+    printf("My thread_num is: %d\n", tinfo->thread_num);
 
-    if ((new_socket = accept(tinfo->master_socket, (struct sockaddr *)&cli_addr, &clilen))<0)
-    {
-        perror("accept");
-        exit(EXIT_FAILURE);
+    while (1) {
+        FD_SET(tinfo->master_socket, &readfds);
+        timeleft.tv_sec = sec;
+        timeleft.tv_usec = nsec;
+        printf("Theread %d is waiting for you\n", tinfo->thread_num);
+        if ((sel_res = select(tinfo->master_socket + 1, &readfds, NULL, NULL, &timeleft)) < 0) {
+            printf("Error: %s in line %d\n", strerror(sel_res), __LINE__);
+        } else if (!sel_res && has_client && tinfo->thread_num >= Nmin && busy_count < thread_count) {
+            printf("Timeout occurred!\n");
+            break;
+        } else if (sel_res && FD_ISSET(tinfo->master_socket, &readfds)) {
+
+            if ((new_socket = accept(tinfo->master_socket, (struct sockaddr *)&cli_addr, &clilen))<0)
+            {
+                perror("accept");
+                exit(EXIT_FAILURE);
+            }
+
+            has_client = 1;
+
+            //inform user of socket number - used in send and receive commands
+            printf("New connection , thread num is %d , ip is : %s , port : %d \n" ,
+                    tinfo->thread_num, inet_ntoa(cli_addr.sin_addr) , ntohs(cli_addr.sin_port));
+
+            pthread_mutex_lock(&lock);
+            busy_count++;
+            printf("Busy count: %d\n", busy_count);
+            pthread_mutex_unlock(&lock);
+
+            tcp_io_loop(new_socket);
+
+            pthread_mutex_lock(&lock);
+            busy_count--;
+            printf("Busy count: %d\n", busy_count);
+            pthread_mutex_unlock(&lock);
+        }
     }
-
-    //inform user of socket number - used in send and receive commands
-    printf("New connection , socket fd is %d , ip is : %s , port : %d \n" ,
-            new_socket , inet_ntoa(cli_addr.sin_addr) , ntohs(cli_addr.sin_port));
-
     pthread_mutex_lock(&lock);
-    busy_count++;
+    thread_count--;
     printf("Busy count: %d\n", busy_count);
+    tinfo->thread_num = -1;
     pthread_mutex_unlock(&lock);
 
-    tcp_io_loop(new_socket);
+    puts("Bye!");
+
     return NULL;
 }
 
