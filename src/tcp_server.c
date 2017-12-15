@@ -1,7 +1,7 @@
 #include "tcp_server.h"
 
-#define Nmin 3
-#define Nmax 9
+#define Nmin 2
+#define Nmax 4
 
 volatile int busy_count;
 volatile int thread_count;
