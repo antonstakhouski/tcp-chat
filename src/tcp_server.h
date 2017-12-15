@@ -25,7 +25,7 @@ int echo(char* buff, int newsockfd);
 int send_time(int newsockfd);
 void tcp_loop(int sockfd);
 void process_requests(struct client_entry* client, fd_set* readfds, fd_set* errorfds);
-static void* thread_start(void* arg);
+void* thread_start(void* arg);
 void tcp_io_loop(int sockfd);
 
 #endif //H_TCP_SERVER

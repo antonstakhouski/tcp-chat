@@ -118,49 +118,31 @@ int tcp_upload(int newsockfd)
 void tcp_io_loop(int sockfd)
 {
     char buffer[TCP_MAX_LEN];
-    struct sockaddr_in cli_addr;
-    socketlen clilen;
+    int n;
 
-    //listen
-    listen(sockfd, 5);
-    clilen = sizeof(cli_addr);
-    int newsockfd, n;
-
-    puts("Server is ready");
     while (1) {
-        newsockfd = accept(sockfd,
-                (struct sockaddr *) &cli_addr,
-                &clilen);
-
-        pthread_mutex_lock(&lock);
-        busy_count++;
-        printf("Busy count: %d\n", busy_count);
-        pthread_mutex_unlock(&lock);
-
-        while (1) {
-            memset(buffer, 0, TCP_MAX_LEN);
-            if ((n = recv(newsockfd, buffer, TCP_MAX_LEN, 0)) > 0) {
-                if (n < 0)
+        memset(buffer, 0, TCP_MAX_LEN);
+        if ((n = recv(sockfd, buffer, TCP_MAX_LEN, 0)) > 0) {
+            printf("got it\n");
+            if (!strncmp(buffer, CLOSE_STR, strlen(CLOSE_STR))) {
+                if (close_sock(sockfd) < 0)
                     break;
-                if (!strncmp(buffer, CLOSE_STR, strlen(CLOSE_STR))) {
-                    if (close_sock(newsockfd) < 0)
-                        break;
-                    break;
-                }
-                if (!strncmp(buffer, ECHO_STR, strlen(ECHO_STR)))
-                    if (echo(strstr(buffer, "\n") + 1, newsockfd) < 0)
-                        break;
-                if (!strncmp(buffer, UPLOAD_STR, strlen(UPLOAD_STR))) {
-                    if(tcp_upload(newsockfd) < 0)
-                        break;
-                }
-                if (!strncmp(buffer, TIME_STR, strlen(TIME_STR)))
-                    if (send_time(newsockfd) < 0 )
-                        break;
+                break;
             }
+            if (!strncmp(buffer, ECHO_STR, strlen(ECHO_STR)))
+                if (echo(strstr(buffer, "\n") + 1, sockfd) < 0)
+                    break;
+            if (!strncmp(buffer, UPLOAD_STR, strlen(UPLOAD_STR))) {
+                if(tcp_upload(sockfd) < 0)
+                    break;
+            }
+            if (!strncmp(buffer, TIME_STR, strlen(TIME_STR)))
+                if (send_time(sockfd) < 0 )
+                    break;
         }
     }
-    close_sock(newsockfd);
+    puts("Bye!");
+    close_sock(sockfd);
 }
 
 void tcp_loop(int master_socket)
@@ -214,7 +196,6 @@ void tcp_loop(int master_socket)
                 }
             }
         }
-        sleep(1);
     }
 
     while(1);
@@ -222,7 +203,7 @@ void tcp_loop(int master_socket)
     pthread_mutex_destroy(&lock);
 }
 
-static void* thread_start(void* arg)
+void* thread_start(void* arg)
 {
     struct thread_info *tinfo= arg;
 
@@ -240,6 +221,11 @@ static void* thread_start(void* arg)
     //inform user of socket number - used in send and receive commands
     printf("New connection , socket fd is %d , ip is : %s , port : %d \n" ,
             new_socket , inet_ntoa(cli_addr.sin_addr) , ntohs(cli_addr.sin_port));
+
+    pthread_mutex_lock(&lock);
+    busy_count++;
+    printf("Busy count: %d\n", busy_count);
+    pthread_mutex_unlock(&lock);
 
     tcp_io_loop(new_socket);
     return NULL;
